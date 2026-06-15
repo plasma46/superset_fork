@@ -18,7 +18,15 @@
  */
 /* eslint-env browser */
 import cx from 'classnames';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import rison from 'rison';
 import { t } from '@apache-superset/core/translation';
 import { addAlpha, JsonObject, useElementOnScreen } from '@superset-ui/core';
 import { css, styled, useTheme } from '@apache-superset/core/theme';
@@ -381,6 +389,74 @@ const DashboardBuilder = () => {
   const filterBarOrientation = useSelector<RootState, FilterBarOrientation>(
     ({ dashboardInfo }) => dashboardInfo.filterBarOrientation,
   );
+
+  const dataMask = useSelector<RootState, RootState['dataMask']>(
+    state => state.dataMask,
+  );
+  const dataMaskRef = useRef(dataMask);
+  useEffect(() => {
+    dataMaskRef.current = dataMask;
+  }, [dataMask]);
+
+  // Handle clicks on <a class="xf-nav-link"> elements rendered inside chart HTML measures.
+  // Reads cross-filter values from Redux dataMask and encodes them into the target dashboard URL.
+  // Usage in SQL/Jinja:
+  //   '<a class="xf-nav-link"
+  //       data-dashboard="225"
+  //       data-filter-id="NATIVE_FILTER-xxxx"
+  //       data-column="plant_producer_name"
+  //       href="#">' ~ label ~ '</a>'
+  useEffect(() => {
+    const handleXfNavLink = (e: MouseEvent) => {
+      const anchor = (e.target as HTMLElement).closest<HTMLAnchorElement>(
+        'a.xf-nav-link',
+      );
+      if (!anchor) return;
+      e.preventDefault();
+
+      const targetDashboard = anchor.getAttribute('data-dashboard');
+      const filterId = anchor.getAttribute('data-filter-id');
+      const column = anchor.getAttribute('data-column');
+
+      if (!targetDashboard || !filterId || !column) return;
+
+      // Search all chart dataMasks for the first one that filters on `column`
+      let selectedValues: string[] | null = null;
+      for (const mask of Object.values(dataMaskRef.current)) {
+        const filters: { col: string; val: any }[] =
+          (mask as any)?.extraFormData?.filters ?? [];
+        const match = filters.find(f => f.col === column);
+        if (match) {
+          selectedValues = Array.isArray(match.val)
+            ? match.val
+            : [match.val];
+          break;
+        }
+      }
+
+      if (!selectedValues?.length) return;
+
+      // Build native_filters dataMask for the target dashboard
+      const nativeFilterMask = {
+        [filterId]: {
+          id: filterId,
+          filterState: { value: selectedValues },
+          extraFormData: {
+            filters: [{ col: column, op: 'IN', val: selectedValues }],
+          },
+        },
+      };
+
+      const encoded = rison.encode(nativeFilterMask);
+      window.open(
+        `/superset/dashboard/${targetDashboard}/?native_filters=${encoded}`,
+        '_blank',
+      );
+    };
+
+    document.addEventListener('click', handleXfNavLink);
+    return () => document.removeEventListener('click', handleXfNavLink);
+  }, []);
 
   const handleChangeTab = useCallback(
     ({ pathToTabIndex }: { pathToTabIndex: string[] }) => {
