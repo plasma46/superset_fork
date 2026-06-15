@@ -161,7 +161,10 @@ BUILD_SUPERSET_FRONTEND_IN_DOCKER=true
             client,
             f"set -e; if [ -d {quoted_dir}/.git ]; then "
             f"cd {quoted_dir}; git remote set-url origin {shlex.quote(repo_url)}; "
-            f"git fetch origin; git checkout {shlex.quote(repo_branch)}; "
+            f"git config --unset-all remote.origin.fetch || true; "
+            f"git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'; "
+            f"git fetch --no-tags origin; "
+            f"git checkout -B {shlex.quote(repo_branch)} origin/{shlex.quote(repo_branch)}; "
             f"git reset --hard origin/{shlex.quote(repo_branch)}; "
             f"else mkdir -p $(dirname {quoted_dir}); "
             f"git clone --branch {shlex.quote(repo_branch)} --depth 1 "
