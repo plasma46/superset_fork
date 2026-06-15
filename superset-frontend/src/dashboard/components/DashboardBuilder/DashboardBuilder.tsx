@@ -390,21 +390,14 @@ const DashboardBuilder = () => {
     ({ dashboardInfo }) => dashboardInfo.filterBarOrientation,
   );
 
-  const dataMask = useSelector<RootState, RootState['dataMask']>(
-    state => state.dataMask,
-  );
-  const dataMaskRef = useRef(dataMask);
-  useEffect(() => {
-    dataMaskRef.current = dataMask;
-  }, [dataMask]);
-
   // Handle clicks on <a class="xf-nav-link"> elements rendered inside chart HTML measures.
-  // Reads cross-filter values from Redux dataMask and encodes them into the target dashboard URL.
+  // Value is taken directly from data-value attribute — no Redux race condition.
   // Usage in SQL/Jinja:
   //   '<a class="xf-nav-link"
   //       data-dashboard="225"
   //       data-filter-id="NATIVE_FILTER-xxxx"
   //       data-column="plant_producer_name"
+  //       data-value="' ~ plant_producer_name ~ '"
   //       href="#">' ~ label ~ '</a>'
   useEffect(() => {
     const handleXfNavLink = (e: MouseEvent) => {
@@ -413,28 +406,16 @@ const DashboardBuilder = () => {
       );
       if (!anchor) return;
       e.preventDefault();
+      e.stopPropagation();
 
       const targetDashboard = anchor.getAttribute('data-dashboard');
       const filterId = anchor.getAttribute('data-filter-id');
       const column = anchor.getAttribute('data-column');
+      const rawValue = anchor.getAttribute('data-value');
 
-      if (!targetDashboard || !filterId || !column) return;
+      if (!targetDashboard || !filterId || !column || !rawValue) return;
 
-      // Search all chart dataMasks for the first one that filters on `column`
-      let selectedValues: string[] | null = null;
-      for (const mask of Object.values(dataMaskRef.current)) {
-        const filters: { col: string; val: any }[] =
-          (mask as any)?.extraFormData?.filters ?? [];
-        const match = filters.find(f => f.col === column);
-        if (match) {
-          selectedValues = Array.isArray(match.val)
-            ? match.val
-            : [match.val];
-          break;
-        }
-      }
-
-      if (!selectedValues?.length) return;
+      const selectedValues = rawValue.split('|').map(v => v.trim()).filter(Boolean);
 
       // Build native_filters dataMask for the target dashboard
       const nativeFilterMask = {
