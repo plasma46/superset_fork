@@ -391,13 +391,14 @@ const DashboardBuilder = () => {
   );
 
   // Handle clicks on <a class="xf-nav-link"> elements rendered inside chart HTML measures.
-  // Value is taken directly from data-value attribute — no Redux race condition.
+  // Values are taken directly from data attributes — no Redux race condition.
+  // Supports multiple filters via "|" separator.
   // Usage in SQL/Jinja:
   //   '<a class="xf-nav-link"
   //       data-dashboard="225"
-  //       data-filter-id="NATIVE_FILTER-xxxx"
-  //       data-column="plant_producer_name"
-  //       data-value="' ~ plant_producer_name ~ '"
+  //       data-columns="plant_producer_name|month"
+  //       data-values="' ~ plant_producer_name ~ '|' ~ month_col ~ '"
+  //       data-filter-ids="NATIVE_FILTER-AAA|NATIVE_FILTER-BBB"
   //       href="#">' ~ label ~ '</a>'
   useEffect(() => {
     const handleXfNavLink = (e: MouseEvent) => {
@@ -409,24 +410,30 @@ const DashboardBuilder = () => {
       e.stopPropagation();
 
       const targetDashboard = anchor.getAttribute('data-dashboard');
-      const filterId = anchor.getAttribute('data-filter-id');
-      const column = anchor.getAttribute('data-column');
-      const rawValue = anchor.getAttribute('data-value');
+      const rawColumns = anchor.getAttribute('data-columns');
+      const rawValues = anchor.getAttribute('data-values');
+      const rawFilterIds = anchor.getAttribute('data-filter-ids');
 
-      if (!targetDashboard || !filterId || !column || !rawValue) return;
+      if (!targetDashboard || !rawColumns || !rawValues || !rawFilterIds) return;
 
-      const selectedValues = rawValue.split('|').map(v => v.trim()).filter(Boolean);
+      const columns = rawColumns.split('|');
+      const values = rawValues.split('|');
+      const filterIds = rawFilterIds.split('|');
 
-      // Build native_filters dataMask for the target dashboard
-      const nativeFilterMask = {
-        [filterId]: {
+      if (columns.length !== values.length || columns.length !== filterIds.length) return;
+
+      const nativeFilterMask: Record<string, any> = {};
+      columns.forEach((col, i) => {
+        const filterId = filterIds[i].trim();
+        const val = [values[i].trim()];
+        nativeFilterMask[filterId] = {
           id: filterId,
-          filterState: { value: selectedValues },
+          filterState: { value: val },
           extraFormData: {
-            filters: [{ col: column, op: 'IN', val: selectedValues }],
+            filters: [{ col: col.trim(), op: 'IN', val }],
           },
-        },
-      };
+        };
+      });
 
       const encoded = rison.encode(nativeFilterMask);
       window.open(
