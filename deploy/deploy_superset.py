@@ -73,21 +73,30 @@ def ensure_secrets(env: dict[str, str]) -> dict[str, str]:
     return env
 
 
-def connect(env: dict[str, str]) -> paramiko.SSHClient:
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(
-        env["SERVER_HOST"],
-        port=int(env.get("SSH_PORT", "22")),
-        username=env.get("SERVER_USER", "root"),
-        password=env.get("SSH_PASSWORD") or None,
-        key_filename=env.get("SSH_KEY_PATH") or None,
-        look_for_keys=not bool(env.get("SSH_PASSWORD")),
-        allow_agent=not bool(env.get("SSH_PASSWORD")),
-        timeout=30,
-        auth_timeout=30,
-    )
-    return client
+def connect(env: dict[str, str], retries: int = 8, delay: float = 4.0) -> paramiko.SSHClient:
+    last_exc: Exception = RuntimeError("no attempts made")
+    for attempt in range(1, retries + 1):
+        try:
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            client.connect(
+                env["SERVER_HOST"],
+                port=int(env.get("SSH_PORT", "22")),
+                username=env.get("SERVER_USER", "root"),
+                password=env.get("SSH_PASSWORD") or None,
+                key_filename=env.get("SSH_KEY_PATH") or None,
+                look_for_keys=not bool(env.get("SSH_PASSWORD")),
+                allow_agent=not bool(env.get("SSH_PASSWORD")),
+                timeout=20,
+                auth_timeout=20,
+            )
+            return client
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            print(f"SSH attempt {attempt}/{retries} failed: {exc}", flush=True)
+            if attempt < retries:
+                time.sleep(delay)
+    raise RuntimeError(f"SSH connection failed after {retries} attempts: {last_exc}")
 
 
 def run(client: paramiko.SSHClient, command: str, timeout: int | None = None) -> None:
