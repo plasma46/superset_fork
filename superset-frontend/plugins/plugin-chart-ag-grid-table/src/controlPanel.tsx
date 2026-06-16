@@ -217,6 +217,16 @@ const parseJsonObject = (value: unknown) => {
   }
 };
 
+const DEFAULT_COMMENT_CONFIG = {
+  enabled: false,
+  database_id: undefined,
+  schema: '',
+  table: '',
+  key_mapping: [],
+  fields: [],
+  refresh_chart_id: undefined,
+};
+
 /*
 Options for row limit control
 */
@@ -784,19 +794,7 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               language: 'json',
               height: 260,
-              default: JSON.stringify(
-                {
-                  enabled: false,
-                  database_id: undefined,
-                  schema: '',
-                  table: '',
-                  key_mapping: [],
-                  fields: [],
-                  refresh_chart_id: undefined,
-                },
-                null,
-                2,
-              ),
+              default: JSON.stringify(DEFAULT_COMMENT_CONFIG, null, 2),
               description: t(
                 'JSON config for editable comments. Backend reads this from form_data.comment_config.',
               ),
@@ -804,7 +802,11 @@ const config: ControlPanelConfig = {
                 value:
                   typeof form_data.comment_config === 'string'
                     ? form_data.comment_config
-                    : JSON.stringify(form_data.comment_config, null, 2),
+                    : JSON.stringify(
+                        form_data.comment_config ?? DEFAULT_COMMENT_CONFIG,
+                        null,
+                        2,
+                      ),
               }),
             },
           },
