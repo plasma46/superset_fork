@@ -7,7 +7,7 @@
 
 ## Правила
 - Перед началом работы — прочитай этот файл
-- После изменений — добавь запись в раздел `## Лог`
+- После изменений — добавь запись в раздел `## Лог` (см. правила архивации внизу)
 - Ветка для работы: `master` в `plasma46/superset_fork`
 - Деплой: `python deploy/deploy_superset.py`
 
@@ -24,60 +24,62 @@
 
 Креды: `deploy/server.env`
 
+### Активные конфиги (важно помнить)
+- `ENABLE_TEMPLATE_PROCESSING=True` — Jinja в SQL включена
+- `HTML_SANITIZATION=False` — HTML-меры (ссылки и т.д.) рендерятся без вырезания
+- Файл: `docker/pythonpath_dev/superset_config.py`
+
 ---
 
-## Текущая задача: Кросс-фильтрация и передача фильтров между дашбордами
+## Решённые задачи (рецепты)
 
-### Цель
-Pivot table (сводник) с HTML-мерой содержит ссылку. При клике на строку
-(применяется кросс-фильтр) → клик по ссылке → открывается другой дашборд
-с этим же значением в Native Filter.
+### Передача значения из одного дашборда в другой через ссылку
+**Способ:** строим полный URL прямо в Jinja внутри SQL датасета — без правок фронтенда.
 
-### Статус: 🚀 Задеплоено, ожидает тестирования
-
-### Как пользоваться (шаблон SQL)
 ```sql
-'<a class="xf-nav-link"
-    data-dashboard="225"
-    data-filter-id="NATIVE_FILTER-XXXXX"
-    data-column="plant_producer_name"
-    href="#">' ~ label ~ '</a>'
+{% set url = '/superset/dashboard/225/?native_filters=(' %}
+CONCAT(
+'{{ url }}',
+'NATIVE_FILTER-w-MinVBIlrnFon9qydBap:(__cache:(label:%27',
+plant_producer_name,
+'%27,validateStatus:!f,value:!(%27',
+REPLACE(plant_producer_name, ' ', '%20'),
+'%27)),extraFormData:(filters:!((col:plant_producer_name,op:IN,val:!(%27',
+REPLACE(plant_producer_name, ' ', '%20'),
+'%27)))),filterState:(label:%27',
+plant_producer_name,
+'%27,validateStatus:!f,value:!(%27',
+REPLACE(plant_producer_name, ' ', '%20'),
+'%27)),id:NATIVE_FILTER-w-MinVBIlrnFon9qydBap,ownState:())',
+',', -- разделитель между фильтрами, без пробела
+-- второй фильтр аналогично, своя пара скобок
+')'
+) as url_param_full
 ```
-- `data-dashboard` — id целевого дашборда
-- `data-filter-id` — id Native Filter на целевом дашборде
-- `data-column` — колонка по которой кросс-фильтруешь
 
-### Что нужно протестировать
-- [ ] Включить кросс-фильтрацию на дашборде (Edit → Enable cross-filters)
-- [ ] Кликнуть на строку в pivot table → убедиться что кросс-фильтр применился
-- [ ] Кликнуть по ссылке → Dashboard B открывается с нужным фильтром
-- [ ] Проверить что `HTML_SANITIZATION=False` — ссылки рендерятся, не вырезаются
-- [ ] Проверить что Jinja работает в SQL (filter_values() и т.д.)
+**Важно:** каждый блок `FILTER_ID:(...)` должен сам закрываться `)` перед запятой/финальной скобкой — частая ошибка при добавлении второго фильтра (см. архив, 2026-06-15).
 
-### Открытые вопросы
-- Нужно ли передавать несколько колонок одновременно?
-- Поведение если кросс-фильтр не выбран (ссылка ведёт без фильтра или не ведёт?)
+**Работает и для строки, и для столбца pivot table** — если оба значения это обычные колонки в одной строке SQL (агрегация по двум полям), оба доступны в Jinja одновременно.
+
+~~Альтернатива (отклонена): `xf-nav-link` — JS-перехватчик клика, читающий Redux dataMask.~~ Откатан 2026-06-15, избыточен — Jinja-подход проще и не требует деплоя фронтенда.
 
 ---
 
-## Лог
+## Лог (последние записи, остальное → `deploy/worklog_archive/`)
 
-### 2026-06-15 — Agent-1 (2)
-- Реализован механизм `xf-nav-link`: клик по HTML-ссылке в чарте читает кросс-фильтры из Redux dataMask и открывает целевой дашборд с `native_filters` в URL
-- Файл: `superset-frontend/src/dashboard/components/DashboardBuilder/DashboardBuilder.tsx`
-- Нужно: задеплоить и протестировать (см. инструкцию ниже)
+### 2026-06-15
+- Решена задача передачи фильтров между дашбордами — через Jinja-URL в SQL (см. "Решённые задачи" выше)
+- Откатан `xf-nav-link` (3 коммита) — пользователь нашёл более простой путь без правок фронтенда
+- Конфиги (`ENABLE_TEMPLATE_PROCESSING`, `HTML_SANITIZATION`) и деплой-фиксы оставлены
 
-### 2026-06-15 — Agent-1 (3)
-- `docker/pythonpath_dev/superset_config.py`: включён `ENABLE_TEMPLATE_PROCESSING=True`, выключен `HTML_SANITIZATION=False`
-- `deploy/deploy_superset.py`: добавлен retry для SSH (6 попыток), исправлен git fetch (--no-tags, сброс fetchspec)
-- `deploy/server.env` (локально): `SUPERSET_LOAD_EXAMPLES=yes` — примеры загрузятся при деплое
-- Деплой запущен, идёт сборка фронтенда
+---
 
-### 2026-06-15 — Agent-1 (2)
-- Реализован `xf-nav-link` в `DashboardBuilder.tsx` — клик по HTML-ссылке читает кросс-фильтры из Redux и открывает целевой дашборд с `?native_filters=<rison>`
+## Архивация
 
-### 2026-06-15 — Agent-1 (1)
-- Поднят сервер, настроен nginx с gzip перед Superset на порту 80
-- Деплой-скрипт переключён на `plasma46/superset_fork`
-- Добавлены `REPO_URL`, `REPO_BRANCH` в `deploy/server.env`
-- Форк запушен в `https://github.com/plasma46/superset_fork`
+Когда раздел `## Лог` превышает ~10 записей или файл становится тяжело читать:
+1. Создать `deploy/worklog_archive/YYYY-MM.md`
+2. Перенести туда записи старше текущей недели целиком (копипаст, без изменений)
+3. В `## Лог` оставить только последние активные записи + ссылку:
+   `См. также: [архив за июнь 2026](worklog_archive/2026-06.md)`
+
+Раздел "Решённые задачи" **не архивируется** — это живой справочник рецептов, актуальный всегда.
