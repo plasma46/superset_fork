@@ -21,17 +21,30 @@ import {
   DataRecord,
   DataRecordValue,
   getTimeFormatterForGranularity,
+  SupersetClient,
 } from '@superset-ui/core';
 import { GenericDataType } from '@apache-superset/core/common';
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { isEqual } from 'lodash';
+import { useDispatch, useSelector } from 'react-redux';
 
 import {
   CellClickedEvent,
+  ColDef,
+  ICellRendererParams,
   SelectionChangedEvent,
 } from '@superset-ui/core/components/ThemedAgGridReact';
 import {
+  addDangerToast,
+  addSuccessToast,
+} from 'src/components/MessageToasts/actions';
+import { refreshChart } from 'src/components/Chart/chartAction';
+import {
   AgGridTableChartTransformedProps,
+  CommentConfig,
+  CommentDirtyState,
+  CommentFieldConfig,
+  CommentOption,
   InputColumn,
   SearchOption,
   SortByItem,
@@ -43,6 +56,17 @@ import { useColDefs } from './utils/useColDefs';
 import { buildSelectionCrossFilterDataMask } from './utils/getCrossFilterDataMask';
 import { StyledChartContainer } from './styles';
 import type { FilterState } from './utils/filterStateManager';
+import {
+  applyMassInput,
+  buildCommentPayload,
+  buildDeletePayload,
+  COMMENT_ACTION_COL_ID,
+  COMMENT_SELECT_COL_ID,
+  getCommentFieldColId,
+  getRowKey,
+  isCommentsEnabled,
+  isNumericInput,
+} from './utils/commentEditing';
 
 const getGridHeight = (height: number, includeSearch: boolean | undefined) => {
   let calculatedGridHeight = height;
@@ -51,6 +75,54 @@ const getGridHeight = (height: number, includeSearch: boolean | undefined) => {
   }
   return calculatedGridHeight - 80;
 };
+
+const normalizeCommentConfig = (
+  config?: CommentConfig | string,
+): CommentConfig | undefined => {
+  if (!config) {
+    return undefined;
+  }
+  if (typeof config === 'string') {
+    try {
+      return JSON.parse(config);
+    } catch {
+      return undefined;
+    }
+  }
+  return config;
+};
+
+const getDynamicOptions = async (
+  field: CommentFieldConfig,
+): Promise<CommentOption[]> => {
+  if (!field.dataset_id || !field.value_column || !field.label_column) {
+    return [];
+  }
+  const { json } = await SupersetClient.get({
+    endpoint: `/api/v1/dataset/${field.dataset_id}/data/`,
+  });
+  const rows =
+    json?.result?.data ||
+    json?.result?.records ||
+    json?.data ||
+    json?.records ||
+    [];
+  return Array.isArray(rows)
+    ? rows.map((row: Record<string, unknown>) => ({
+        value: row[field.value_column!],
+        label: String(
+          row[field.label_column!] ?? row[field.value_column!] ?? '',
+        ),
+      }))
+    : [];
+};
+
+const getOptionValue = (
+  options: CommentOption[],
+  selectedValue: string,
+): unknown =>
+  options.find(option => String(option.value) === selectedValue)?.value ??
+  selectedValue;
 
 export default function TableChart<D extends DataRecord = DataRecord>(
   props: AgGridTableChartTransformedProps<D> & {},
@@ -86,9 +158,29 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     onChartStateChange,
     chartState,
     metricSqlExpressions,
+    commentConfig: rawCommentConfig,
   } = props;
 
   const [searchOptions, setSearchOptions] = useState<SearchOption[]>([]);
+  const dispatch = useDispatch();
+  const dashboardId = useSelector(
+    (state: { dashboardInfo?: { id?: number } }) => state.dashboardInfo?.id,
+  );
+  const commentConfig = useMemo(
+    () => normalizeCommentConfig(rawCommentConfig),
+    [rawCommentConfig],
+  );
+  const commentsEnabled = isCommentsEnabled(commentConfig);
+  const [selectedRows, setSelectedRows] = useState<DataRecord[]>([]);
+  const [dirtyState, setDirtyState] = useState<CommentDirtyState>({});
+  const [invalidCells, setInvalidCells] = useState<Record<string, boolean>>({});
+  const [dynamicOptions, setDynamicOptions] = useState<
+    Record<string, CommentOption[]>
+  >({});
+  const [isSavingComments, setIsSavingComments] = useState(false);
+  const [massInputOpen, setMassInputOpen] = useState(false);
+  const [massInputField, setMassInputField] = useState('');
+  const [massInputValue, setMassInputValue] = useState('');
 
   // Extract metric column names for SQL conversion
   const metricColumns = useMemo(
@@ -111,6 +203,34 @@ export default function TableChart<D extends DataRecord = DataRecord>(
       setSearchOptions(options || []);
     }
   }, [columns]);
+
+  useEffect(() => {
+    if (!commentsEnabled || !commentConfig?.fields) {
+      return;
+    }
+    commentConfig.fields
+      .filter(field => field.type === 'dropdown_dynamic')
+      .forEach(field => {
+        const fieldKey = field.target_column;
+        if (dynamicOptions[fieldKey]) {
+          return;
+        }
+        getDynamicOptions(field)
+          .then(options =>
+            setDynamicOptions(current => ({
+              ...current,
+              [fieldKey]: options,
+            })),
+          )
+          .catch(() =>
+            dispatch(
+              addDangerToast(
+                t('Failed to load dynamic options for %s', field.view_column),
+              ),
+            ),
+          );
+      });
+  }, [commentsEnabled, commentConfig?.fields, dispatch, dynamicOptions]);
 
   useEffect(() => {
     if (!serverPagination || !serverPaginationData || !rowCount) return;
@@ -244,6 +364,207 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     slice_id,
   });
 
+  const updateCommentValue = useCallback(
+    (
+      row: DataRecord,
+      field: CommentFieldConfig,
+      rawValue: unknown,
+      invalid = false,
+    ) => {
+      if (!commentConfig) return;
+      const rowKey = getRowKey(row, commentConfig);
+      const invalidKey = `${rowKey}:${field.target_column}`;
+      setInvalidCells(current => ({
+        ...current,
+        [invalidKey]: invalid,
+      }));
+      if (invalid) {
+        return;
+      }
+      const value =
+        field.type === 'number' && rawValue !== '' && rawValue != null
+          ? Number(rawValue)
+          : rawValue;
+      setDirtyState(current => ({
+        ...current,
+        [rowKey]: {
+          ...(current[rowKey] || {}),
+          [field.target_column]: value,
+        },
+      }));
+    },
+    [commentConfig],
+  );
+
+  const handleDeleteComment = useCallback(
+    async (row: DataRecord) => {
+      if (!commentConfig) {
+        return;
+      }
+      setIsSavingComments(true);
+      try {
+        await SupersetClient.post({
+          endpoint: `/api/v1/chart/${slice_id}/comments`,
+          jsonPayload: buildDeletePayload(row, commentConfig),
+        });
+        dispatch(addSuccessToast(t('Saved')));
+        if (commentConfig.refresh_chart_id) {
+          (dispatch as any)(
+            refreshChart(commentConfig.refresh_chart_id, true, dashboardId),
+          );
+        }
+      } catch (error) {
+        dispatch(
+          addDangerToast(
+            (error as Error)?.message ||
+              t('Failed to delete comment. Please try again.'),
+          ),
+        );
+      } finally {
+        setIsSavingComments(false);
+      }
+    },
+    [commentConfig, dashboardId, dispatch, slice_id],
+  );
+
+  const commentColDefs = useMemo<ColDef[]>(() => {
+    if (!commentsEnabled || !commentConfig) {
+      return colDefs as ColDef[];
+    }
+
+    const selectCol: ColDef = {
+      colId: COMMENT_SELECT_COL_ID,
+      field: COMMENT_SELECT_COL_ID,
+      headerName: '',
+      checkboxSelection: true,
+      headerCheckboxSelection: true,
+      width: 48,
+      minWidth: 48,
+      maxWidth: 56,
+      pinned: 'left',
+      lockPosition: true,
+      sortable: false,
+      filter: false,
+      resizable: false,
+      suppressMenu: true,
+    };
+
+    const editableCols = (commentConfig.fields || []).map(field => ({
+      colId: getCommentFieldColId(field),
+      field: getCommentFieldColId(field),
+      headerName: field.view_column,
+      minWidth: 160,
+      sortable: false,
+      filter: false,
+      cellRenderer: (params: ICellRendererParams) => {
+        if (!params.data || params.node?.rowPinned) {
+          return null;
+        }
+        const row = params.data as DataRecord;
+        const rowKey = getRowKey(row, commentConfig);
+        const dirtyValue = dirtyState[rowKey]?.[field.target_column];
+        const value = dirtyValue ?? row[field.view_column] ?? '';
+        const invalidKey = `${rowKey}:${field.target_column}`;
+        const hasError = Boolean(invalidCells[invalidKey]);
+        const commonStyle = {
+          width: '100%',
+          minHeight: 24,
+          border: hasError ? '1px solid #d93025' : '1px solid #d9d9d9',
+          borderRadius: 4,
+          padding: '0 6px',
+        };
+
+        if (field.type === 'dropdown_static' || field.type === 'dropdown_dynamic') {
+          const options =
+            field.type === 'dropdown_static'
+              ? field.options || []
+              : dynamicOptions[field.target_column] || [];
+          return (
+            <select
+              aria-label={field.view_column}
+              style={commonStyle}
+              value={String(value ?? '')}
+              onChange={event =>
+                updateCommentValue(
+                  row,
+                  field,
+                  getOptionValue(options, event.currentTarget.value),
+                )
+              }
+            >
+              <option value="" />
+              {options.map(option => (
+                <option
+                  key={String(option.value)}
+                  value={String(option.value)}
+                >
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          );
+        }
+
+        return (
+          <input
+            aria-label={field.view_column}
+            style={commonStyle}
+            type={field.type === 'number' ? 'number' : 'text'}
+            value={String(value ?? '')}
+            onKeyPress={event => {
+              if (
+                field.type === 'number' &&
+                !/[\d.-]/.test(event.key)
+              ) {
+                event.preventDefault();
+              }
+            }}
+            onChange={event => {
+              const nextValue = event.currentTarget.value;
+              updateCommentValue(
+                row,
+                field,
+                nextValue,
+                field.type === 'number' && !isNumericInput(nextValue),
+              );
+            }}
+          />
+        );
+      },
+    }));
+
+    const actionCol: ColDef = {
+      colId: COMMENT_ACTION_COL_ID,
+      field: COMMENT_ACTION_COL_ID,
+      headerName: '',
+      width: 92,
+      minWidth: 92,
+      pinned: 'right',
+      sortable: false,
+      filter: false,
+      cellRenderer: (params: ICellRendererParams) =>
+        !params.data || params.node?.rowPinned ? null : (
+          <button
+            type="button"
+            onClick={() => handleDeleteComment(params.data as DataRecord)}
+          >
+            {t('Delete')}
+          </button>
+        ),
+    };
+
+    return [selectCol, ...(colDefs as ColDef[]), ...editableCols, actionCol];
+  }, [
+    colDefs,
+    commentConfig,
+    commentsEnabled,
+    dirtyState,
+    dynamicOptions,
+    invalidCells,
+    handleDeleteComment,
+    updateCommentValue,
+  ]);
+
   const gridHeight = getGridHeight(height, includeSearch);
 
   const isActiveFilterValue = useCallback(
@@ -275,10 +596,19 @@ export default function TableChart<D extends DataRecord = DataRecord>(
   const handleCellClicked = useCallback(
     (event: CellClickedEvent) => {
       if (!emitCrossFilters || !event.column) return;
+      const clickedColId = event.column.getColId();
+      if (
+        clickedColId === COMMENT_SELECT_COL_ID ||
+        clickedColId === COMMENT_ACTION_COL_ID ||
+        clickedColId.startsWith('__comment_field__')
+      ) {
+        activeColumnRef.current = null;
+        return;
+      }
       const colDef = event.column.getColDef();
       if (colDef.context?.isMetric || colDef.context?.isPercentMetric) return;
 
-      const key = event.column.getColId();
+      const key = clickedColId;
       activeColumnRef.current = key;
 
       // Re-click on already-filtered single selection → untoggle
@@ -331,6 +661,71 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     },
     [emitCrossFilters, setDataMask, timeGrain, timestampFormatter],
   );
+
+  const hasDirtyRows = Object.values(dirtyState).some(
+    fields => Object.keys(fields).length > 0,
+  );
+  const hasInvalidCells = Object.values(invalidCells).some(Boolean);
+
+  const saveComments = useCallback(async () => {
+    if (!commentConfig || !hasDirtyRows || hasInvalidCells) {
+      return;
+    }
+    setIsSavingComments(true);
+    try {
+      await SupersetClient.post({
+        endpoint: `/api/v1/chart/${slice_id}/comments`,
+        jsonPayload: buildCommentPayload(dirtyState, data, commentConfig),
+      });
+      setDirtyState({});
+      setInvalidCells({});
+      dispatch(addSuccessToast(t('Saved')));
+      if (commentConfig.refresh_chart_id) {
+        (dispatch as any)(
+          refreshChart(commentConfig.refresh_chart_id, true, dashboardId),
+        );
+      }
+    } catch (error) {
+      dispatch(
+        addDangerToast(
+          (error as Error)?.message ||
+            t('Failed to save comments. Please try again.'),
+        ),
+      );
+    } finally {
+      setIsSavingComments(false);
+    }
+  }, [
+    commentConfig,
+    dashboardId,
+    data,
+    dirtyState,
+    dispatch,
+    hasDirtyRows,
+    hasInvalidCells,
+    slice_id,
+  ]);
+
+  const applyMassValue = useCallback(() => {
+    if (!commentConfig) {
+      return;
+    }
+    const field = (commentConfig.fields || []).find(
+      item => item.target_column === massInputField,
+    );
+    if (!field) {
+      return;
+    }
+    if (field.type === 'number' && !isNumericInput(massInputValue)) {
+      dispatch(addDangerToast(t('Value must be numeric')));
+      return;
+    }
+    setDirtyState(current =>
+      applyMassInput(current, selectedRows, commentConfig, field, massInputValue),
+    );
+    setMassInputOpen(false);
+    setMassInputValue('');
+  }, [commentConfig, dispatch, massInputField, massInputValue, selectedRows]);
 
   const handleServerPaginationChange = useCallback(
     (pageNumber: number, pageSize: number) => {
@@ -413,10 +808,77 @@ export default function TableChart<D extends DataRecord = DataRecord>(
 
   return (
     <StyledChartContainer height={height}>
+      {commentsEnabled && (
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+            marginBottom: 8,
+          }}
+        >
+          {selectedRows.length >= 2 && (
+            <button type="button" onClick={() => setMassInputOpen(true)}>
+              {t('Mass input')}
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={!hasDirtyRows || hasInvalidCells || isSavingComments}
+            onClick={saveComments}
+          >
+            {isSavingComments ? t('Saving...') : t('Save')}
+          </button>
+          {hasInvalidCells && (
+            <span style={{ color: '#d93025' }}>{t('Fix invalid values')}</span>
+          )}
+        </div>
+      )}
+      {commentsEnabled && massInputOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            zIndex: 5,
+            background: '#fff',
+            border: '1px solid #d9d9d9',
+            borderRadius: 4,
+            padding: 12,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          }}
+        >
+          <div style={{ marginBottom: 8 }}>
+            <select
+              aria-label={t('Field')}
+              value={massInputField}
+              onChange={event => setMassInputField(event.currentTarget.value)}
+            >
+              <option value="" />
+              {(commentConfig?.fields || []).map(field => (
+                <option key={field.target_column} value={field.target_column}>
+                  {field.view_column}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={{ marginBottom: 8 }}>
+            <input
+              aria-label={t('Value')}
+              value={massInputValue}
+              onChange={event => setMassInputValue(event.currentTarget.value)}
+            />
+          </div>
+          <button type="button" onClick={applyMassValue}>
+            {t('Apply')}
+          </button>
+          <button type="button" onClick={() => setMassInputOpen(false)}>
+            {t('Cancel')}
+          </button>
+        </div>
+      )}
       <AgGridDataTable
         gridHeight={gridHeight}
         data={data || []}
-        colDefsFromProps={colDefs}
+        colDefsFromProps={commentColDefs}
         includeSearch={!!includeSearch}
         allowRearrangeColumns={!!allowRearrangeColumns}
         pagination={!!pageSize && !serverPagination}
@@ -435,6 +897,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         id={slice_id}
         handleCellClicked={handleCellClicked}
         handleSelectionChanged={handleSelectionChanged}
+        onSelectedRowsChange={setSelectedRows}
         filters={filters}
         percentMetrics={percentMetrics}
         serverPageLength={serverPageLength}

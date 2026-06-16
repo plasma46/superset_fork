@@ -784,6 +784,7 @@ const transformProps = (
     formData,
     metricSqlExpressions,
     chartState,
+    commentConfig: formData.comment_config,
     onChartStateChange,
   };
 };

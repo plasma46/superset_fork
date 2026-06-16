@@ -194,6 +194,29 @@ const percentMetricsControl: typeof sharedControls.metrics = {
   validators: [],
 };
 
+const validateJsonArray = (value: string | undefined) => {
+  if (!value) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? [] : [t('Must be a JSON array')];
+  } catch {
+    return [t('Must be valid JSON')];
+  }
+};
+
+const parseJsonObject = (value: unknown) => {
+  if (!value || typeof value !== 'string') {
+    return value;
+  }
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+};
+
 /*
 Options for row limit control
 */
@@ -749,6 +772,80 @@ const config: ControlPanelConfig = {
       ],
     },
     {
+      label: t('Comments'),
+      expanded: false,
+      controlSetRows: [
+        [
+          {
+            name: 'comment_config',
+            config: {
+              type: 'TextAreaControl',
+              label: t('Comments configuration'),
+              renderTrigger: true,
+              language: 'json',
+              height: 260,
+              default: JSON.stringify(
+                {
+                  enabled: false,
+                  database_id: undefined,
+                  schema: '',
+                  table: '',
+                  key_mapping: [],
+                  fields: [],
+                  refresh_chart_id: undefined,
+                },
+                null,
+                2,
+              ),
+              description: t(
+                'JSON config for editable comments. Backend reads this from form_data.comment_config.',
+              ),
+              mapStateToProps: ({ form_data }) => ({
+                value:
+                  typeof form_data.comment_config === 'string'
+                    ? form_data.comment_config
+                    : JSON.stringify(form_data.comment_config, null, 2),
+              }),
+            },
+          },
+        ],
+        [
+          {
+            name: 'comment_key_mapping_json',
+            config: {
+              type: 'TextAreaControl',
+              label: t('Key mapping JSON helper'),
+              renderTrigger: true,
+              language: 'json',
+              height: 120,
+              default: '[]',
+              validators: [validateJsonArray],
+              description: t(
+                'Helper only: array of {"view_column":"...","target_column":"..."}. Copy into comment_config.key_mapping.',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'comment_fields_json',
+            config: {
+              type: 'TextAreaControl',
+              label: t('Fields JSON helper'),
+              renderTrigger: true,
+              language: 'json',
+              height: 180,
+              default: '[]',
+              validators: [validateJsonArray],
+              description: t(
+                'Helper only: array of editable field configs. Copy into comment_config.fields.',
+              ),
+            },
+          },
+        ],
+      ],
+    },
+    {
       ...sections.timeComparisonControls({
         multi: false,
         showCalculationType: false,
@@ -757,11 +854,19 @@ const config: ControlPanelConfig = {
       visibility: isAggMode,
     },
   ],
-  formDataOverrides: formData => ({
-    ...formData,
-    metrics: getStandardizedControls().popAllMetrics(),
-    groupby: getStandardizedControls().popAllColumns(),
-  }),
+  formDataOverrides: formData => {
+    const {
+      comment_key_mapping_json: _commentKeyMappingJson,
+      comment_fields_json: _commentFieldsJson,
+      ...cleanFormData
+    } = formData;
+    return {
+      ...cleanFormData,
+      comment_config: parseJsonObject(formData.comment_config),
+      metrics: getStandardizedControls().popAllMetrics(),
+      groupby: getStandardizedControls().popAllColumns(),
+    };
+  },
 };
 
 export default config;

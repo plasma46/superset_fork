@@ -98,6 +98,7 @@ export interface AgGridTableProps {
   hasServerPageLengthChanged: boolean;
   handleCellClicked: (event: CellClickedEvent) => void;
   handleSelectionChanged: (event: SelectionChangedEvent) => void;
+  onSelectedRowsChange?: (rows: DataRecord[]) => void;
   filters?: Record<string, DataRecordValue[]> | null;
   renderTimeComparisonDropdown: () => JSX.Element | null;
   cleanedTotals: DataRecord;
@@ -138,6 +139,7 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
     hasServerPageLengthChanged,
     handleCellClicked,
     handleSelectionChanged,
+    onSelectedRowsChange,
     filters,
     renderTimeComparisonDropdown,
     cleanedTotals,
@@ -512,7 +514,10 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
           rowSelection="multiple"
           animateRows
           onCellClicked={handleCellClicked}
-          onSelectionChanged={handleSelectionChanged}
+          onSelectionChanged={event => {
+            onSelectedRowsChange?.(event.api.getSelectedRows());
+            handleSelectionChanged(event);
+          }}
           onFilterChanged={handleFilterChanged}
           onStateUpdated={handleGridStateChange}
           initialState={gridInitialState}

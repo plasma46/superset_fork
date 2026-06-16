@@ -81,6 +81,7 @@ export type TableChartFormData = QueryFormData & {
   time_grain_sqla?: TimeGranularity;
   column_config?: Record<string, TableColumnConfig>;
   allow_rearrange_columns?: boolean;
+  comment_config?: CommentConfig | string;
 };
 
 export interface TableChartProps extends ChartProps {
@@ -128,10 +129,55 @@ export interface AgGridTableChartTransformedProps<
   basicColorFormatters?: { [Key: string]: BasicColorFormatterType }[];
   basicColorColumnFormatters?: { [Key: string]: BasicColorFormatterType }[];
   formData: TableChartFormData;
+  commentConfig?: CommentConfig | string;
   metricSqlExpressions: Record<string, string>;
   onChartStateChange?: (chartState: JsonObject) => void;
   chartState?: AgGridChartState;
 }
+
+export type CommentFieldType =
+  | 'text'
+  | 'number'
+  | 'dropdown_static'
+  | 'dropdown_dynamic';
+
+export type CommentOption = {
+  label: string;
+  value: unknown;
+};
+
+export type CommentKeyMapping = {
+  view_column: string;
+  target_column: string;
+};
+
+export type CommentFieldConfig = {
+  view_column: string;
+  target_column: string;
+  type: CommentFieldType;
+  options?: CommentOption[];
+  dataset_id?: number;
+  value_column?: string;
+  label_column?: string;
+};
+
+export type CommentConfig = {
+  enabled?: boolean;
+  database_id?: number;
+  schema?: string;
+  table?: string;
+  key_mapping?: CommentKeyMapping[];
+  fields?: CommentFieldConfig[];
+  refresh_chart_id?: number;
+};
+
+export type CommentDirtyState = Record<string, Record<string, unknown>>;
+
+export type CommentSaveRecord = {
+  keys: Record<string, unknown>;
+  fields?: Record<string, unknown>;
+  is_delete: boolean;
+};
 
 export interface SortState {
   colId: string;
