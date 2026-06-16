@@ -18,15 +18,7 @@
  */
 /* eslint-env browser */
 import cx from 'classnames';
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import rison from 'rison';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { t } from '@apache-superset/core/translation';
 import { addAlpha, JsonObject, useElementOnScreen } from '@superset-ui/core';
 import { css, styled, useTheme } from '@apache-superset/core/theme';
@@ -389,62 +381,6 @@ const DashboardBuilder = () => {
   const filterBarOrientation = useSelector<RootState, FilterBarOrientation>(
     ({ dashboardInfo }) => dashboardInfo.filterBarOrientation,
   );
-
-  // Handle clicks on <a class="xf-nav-link"> elements rendered inside chart HTML measures.
-  // Values are taken directly from data attributes — no Redux race condition.
-  // Supports multiple filters via "|" separator.
-  // Usage in SQL/Jinja:
-  //   '<a class="xf-nav-link"
-  //       data-dashboard="225"
-  //       data-columns="plant_producer_name|month"
-  //       data-values="' ~ plant_producer_name ~ '|' ~ month_col ~ '"
-  //       data-filter-ids="NATIVE_FILTER-AAA|NATIVE_FILTER-BBB"
-  //       href="#">' ~ label ~ '</a>'
-  useEffect(() => {
-    const handleXfNavLink = (e: MouseEvent) => {
-      const anchor = (e.target as HTMLElement).closest<HTMLAnchorElement>(
-        'a.xf-nav-link',
-      );
-      if (!anchor) return;
-      e.preventDefault();
-      e.stopPropagation();
-
-      const targetDashboard = anchor.getAttribute('data-dashboard');
-      const rawColumns = anchor.getAttribute('data-columns');
-      const rawValues = anchor.getAttribute('data-values');
-      const rawFilterIds = anchor.getAttribute('data-filter-ids');
-
-      if (!targetDashboard || !rawColumns || !rawValues || !rawFilterIds) return;
-
-      const columns = rawColumns.split('|');
-      const values = rawValues.split('|');
-      const filterIds = rawFilterIds.split('|');
-
-      if (columns.length !== values.length || columns.length !== filterIds.length) return;
-
-      const nativeFilterMask: Record<string, any> = {};
-      columns.forEach((col, i) => {
-        const filterId = filterIds[i].trim();
-        const val = [values[i].trim()];
-        nativeFilterMask[filterId] = {
-          id: filterId,
-          filterState: { value: val },
-          extraFormData: {
-            filters: [{ col: col.trim(), op: 'IN', val }],
-          },
-        };
-      });
-
-      const encoded = rison.encode(nativeFilterMask);
-      window.open(
-        `/superset/dashboard/${targetDashboard}/?native_filters=${encoded}`,
-        '_blank',
-      );
-    };
-
-    document.addEventListener('click', handleXfNavLink);
-    return () => document.removeEventListener('click', handleXfNavLink);
-  }, []);
 
   const handleChangeTab = useCallback(
     ({ pathToTabIndex }: { pathToTabIndex: string[] }) => {
