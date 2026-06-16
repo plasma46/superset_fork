@@ -165,6 +165,46 @@ CREATE TABLE demo_comments (
 
 ---
 
+## Лог
+
+### 2026-06-16 — Agent-1 (backend/Table V2 comments)
+- Реализован `POST /api/v1/chart/<pk>/comments`:
+  - `superset/commands/chart/comments.py` (новый) — `InsertChartCommentsCommand`: читает `form_data.comment_config`, валидирует ключи/типы (text/number/dropdown_static строго; dropdown_dynamic не валидируется на бэке — см. договорённости), строит INSERT через SQLAlchemy Core с reflected table (`autoload_with=engine`) — защита от SQL-инъекций на уровне колонок и значений.
+  - `superset/commands/chart/exceptions.py` — добавлены `CommentsConfigError` (404), `CommentsValidationError` (422), `CommentsForbiddenError` (403), `CommentsDatabaseNotFoundError` (404).
+  - `superset/charts/api.py` — новый route `post_comments` на `ChartRestApi`, добавлен в `include_route_methods`.
+  - `superset/security/manager.py` — зарегистрирован permission `can_write` / view menu `Comments` в `create_custom_permissions()`. Нужно зайти в Superset UI → Roles и вручную добавить `can_write on Comments` нужным ролям (permission создаётся при старте приложения, но не назначается ролям автоматически).
+  - `tests/unit_tests/charts/commands/test_comments.py` (новый) — 16 тестов (15 passed + 1 skipped намеренно), покрывают: chart not found, permission denial, config missing/disabled, missing key, unknown field, числовая валидация (валид/невалид), dropdown_static валидация, database not found, сборку INSERT-строк (включая `is_delete`), пустой `records`.
+- Создана демо-таблица `demo_comments` в Postgres (`superset_db` контейнер, схема `public`) — протестирован реальный INSERT (обычная запись + `is_delete=true`), см. SQL-схему в разделе "Тестовая таблица" выше.
+- Тесты прогнаны внутри `superset_app` контейнера (`docker exec ... pytest`), не в продовом образе — `tests/` не запечён в `docker-compose-non-dev.yml` сборку, копировал файлы вручную через `docker cp` для верификации. Тесты в репо актуальны и будут подхвачены при следующей полной пересборке (`docker compose up --build`).
+- Закоммичено (`649de7dea2`), **не запушено** — жду пока Agent-2 закоммитит фронтенд, чтобы избежать двух параллельных push в одну ветку.
+- Замечание по фронтенд-части (видел в этом же файле выше): Jest не запущен у Agent-2 (`node_modules` отсутствует, `npm.cmd test` падает на `cross-env`). Тесты написаны, но не верифицированы — нужно поднять `yarn install` в `superset-frontend` и прогнать перед тем как считать фичу полностью готовой.
+
+### 2026-06-16 — Agent-1 (frontend/Table V2 comments)
+- В рамках frontend-части активной задачи изменён только `superset-frontend/plugins/plugin-chart-ag-grid-table/`:
+  - `src/types.ts`: добавлены типы `CommentConfig`, `CommentFieldConfig`, `CommentDirtyState`, payload records; `formData.comment_config` поддерживает объект или JSON-строку.
+  - `src/utils/commentEditing.ts`: добавлены pure helpers для composite row key, number validation, bulk apply, save/delete payload.
+  - `src/transformProps.ts`: `formData.comment_config` прокидывается в `AgGridTableChart`.
+  - `src/controlPanel.tsx`: добавлена секция `Comments`; `comment_config` сохраняется под `form_data.comment_config`, helper JSON-поля очищаются из итогового form_data.
+  - `src/AgGridTable/index.tsx`: добавлен callback `onSelectedRowsChange` поверх существующего `onSelectionChanged`.
+  - `src/AgGridTableChart.tsx`: добавлены checkbox bulk-select, editable comment columns, dirty-state, Mass input, Save/Delete через `POST /api/v1/chart/<chart_id>/comments`, dynamic dropdown options через `/api/v1/dataset/<id>/data/`, success/error toasts, optional `refreshChart`.
+  - `test/utils/commentEditing.test.ts`: добавлены Jest-тесты helper-логики: number validation, single/bulk payload, mass input, dirty clear model.
+- Как тестировать вручную:
+  1. Включить Table V2 (`AG_GRID_TABLE_ENABLED=True`) и создать chart `ag-grid-table`.
+  2. В секции Comments заполнить `comment_config` JSON по контракту из активной задачи.
+  3. Открыть дашборд, изменить text/number/dropdown ячейки, проверить что Save активируется.
+  4. Выбрать 2+ строки чекбоксами, нажать `Mass input`, применить значение, затем Save.
+  5. Проверить Delete на строке: должен уйти payload с `is_delete: true`.
+  6. Если задан `refresh_chart_id`, после успешного Save/Delete должен обновиться указанный chart.
+- Как тестировать через Jest:
+  - Из `superset-frontend`: `npm.cmd test -- --runInBand plugins/plugin-chart-ag-grid-table/test/utils/commentEditing.test.ts plugins/plugin-chart-ag-grid-table/test/controlPanel.test.ts`
+- Проверки:
+  - `git diff --check -- superset-frontend/plugins/plugin-chart-ag-grid-table` — OK.
+  - Jest не запущен: в `superset-frontend` отсутствует `node_modules`; `yarn` не установлен; `npm.cmd test` падает на отсутствующем `cross-env`.
+- Отклонение/ограничение:
+  - В Control Panel для сложных массивов `key_mapping` и `fields` использован JSON editor/helper, а не полноценный визуальный dynamic rows builder. Backend-контракт не изменён: итоговый `form_data.comment_config` остаётся объектом с согласованной структурой.
+
+---
+
 ## Архивация
 
 Когда раздел `## Лог` превышает ~10 записей или файл становится тяжело читать:
