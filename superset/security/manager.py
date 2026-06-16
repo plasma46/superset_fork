@@ -1243,6 +1243,9 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
         self.add_permission_view_menu("can_drill", "Dashboard")
         self.add_permission_view_menu("can_tag", "Chart")
         self.add_permission_view_menu("can_tag", "Dashboard")
+        # Allows writing/soft-deleting comment records from ag-grid Table V2 charts
+        # (see superset/commands/chart/comments.py and deploy/AGENT2_TASK.md)
+        self.add_permission_view_menu("can_write", "Comments")
 
     def create_missing_perms(self) -> None:
         """

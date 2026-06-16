@@ -162,3 +162,24 @@ class ChartFaveError(CommandException):
 
 class ChartUnfaveError(CommandException):
     message = _("Error unfaving chart")
+
+
+class CommentsConfigError(CommandInvalidError):
+    """Raised when a chart's comment_config is missing or invalid."""
+
+    status = 404
+
+
+class CommentsValidationError(CommandInvalidError):
+    """Raised when a comment record fails validation (keys/fields/type)."""
+
+    status = 422
+
+
+class CommentsForbiddenError(ForbiddenError):
+    message = _("You don't have permission to write comments")
+
+
+class CommentsDatabaseNotFoundError(CommandException):
+    status = 404
+    message = _("Configured comments database not found")

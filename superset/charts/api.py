@@ -55,6 +55,7 @@ from superset.charts.schemas import (
     screenshot_query_schema,
     thumbnail_query_schema,
 )
+from superset.commands.chart.comments import InsertChartCommentsCommand
 from superset.commands.chart.create import CreateChartCommand
 from superset.commands.chart.delete import DeleteChartCommand
 from superset.commands.chart.exceptions import (
@@ -64,6 +65,10 @@ from superset.commands.chart.exceptions import (
     ChartInvalidError,
     ChartNotFoundError,
     ChartUpdateFailedError,
+    CommentsConfigError,
+    CommentsDatabaseNotFoundError,
+    CommentsForbiddenError,
+    CommentsValidationError,
     DashboardsForbiddenError,
 )
 from superset.commands.chart.export import ExportChartsCommand
@@ -130,6 +135,7 @@ class ChartRestApi(BaseSupersetModelRestApi):
         "screenshot",
         "cache_screenshot",
         "warm_up_cache",
+        "post_comments",
     }
     class_permission_name = "Chart"
     method_permission_name = MODEL_API_RW_METHOD_PERMISSION_MAP
@@ -1007,6 +1013,90 @@ class ChartRestApi(BaseSupersetModelRestApi):
             self.response_403()
 
         return self.response(200, result="OK")
+
+    @expose("/<pk>/comments", methods=("POST",))
+    @protect()
+    @safe
+    @statsd_metrics
+    @requires_json
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.post_comments",
+        log_to_statsd=False,
+    )
+    def post_comments(self, pk: int) -> Response:
+        """Insert or soft-delete comment records for an ag-grid Table V2 chart.
+
+        Requires the `can_write` permission on the `Comments` view menu, and a
+        `comment_config` block in the chart's form_data (see
+        deploy/AGENT2_TASK.md for the full contract).
+        ---
+        post:
+          summary: Insert comment records for a chart
+          parameters:
+          - in: path
+            schema:
+              type: integer
+            name: pk
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    records:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          keys:
+                            type: object
+                          fields:
+                            type: object
+                          is_delete:
+                            type: boolean
+          responses:
+            200:
+              description: Comments inserted
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      inserted:
+                        type: integer
+            400:
+              $ref: '#/components/responses/400'
+            401:
+              $ref: '#/components/responses/401'
+            403:
+              $ref: '#/components/responses/403'
+            404:
+              $ref: '#/components/responses/404'
+            422:
+              $ref: '#/components/responses/422'
+            500:
+              $ref: '#/components/responses/500'
+        """
+        body = request.json or {}
+        records = body.get("records")
+        if not isinstance(records, list):
+            return self.response_400(message="`records` must be a list")
+
+        try:
+            inserted = InsertChartCommentsCommand(pk, records).run()
+        except ChartNotFoundError:
+            return self.response_404()
+        except CommentsForbiddenError as ex:
+            return self.response_403(message=str(ex))
+        except CommentsConfigError as ex:
+            return self.response_404(message=str(ex))
+        except CommentsDatabaseNotFoundError as ex:
+            return self.response_404(message=str(ex))
+        except CommentsValidationError as ex:
+            return self.response_422(message=str(ex))
+
+        return self.response(200, inserted=inserted)
 
     @expose("/warm_up_cache", methods=("PUT",))
     @protect()
