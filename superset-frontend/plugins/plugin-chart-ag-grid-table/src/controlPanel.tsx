@@ -227,6 +227,14 @@ const DEFAULT_COMMENT_CONFIG = {
   refresh_chart_id: undefined,
 };
 
+const getCommentConfigEnabled = (commentConfig: unknown): boolean => {
+  const parsed =
+    typeof commentConfig === 'string'
+      ? parseJsonObject(commentConfig)
+      : commentConfig;
+  return Boolean((parsed as { enabled?: boolean } | undefined)?.enabled);
+};
+
 /*
 Options for row limit control
 */
@@ -787,6 +795,25 @@ const config: ControlPanelConfig = {
       controlSetRows: [
         [
           {
+            name: 'comments_enabled',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Enable comments'),
+              renderTrigger: true,
+              default: false,
+              description: t(
+                'If unchecked, this table behaves as a regular table with no ' +
+                  'editable comment columns, and the JSON settings below are ' +
+                  'hidden and not validated.',
+              ),
+              mapStateToProps: ({ form_data }) => ({
+                value: getCommentConfigEnabled(form_data.comment_config),
+              }),
+            },
+          },
+        ],
+        [
+          {
             name: 'comment_config',
             config: {
               type: 'TextAreaControl',
@@ -808,6 +835,8 @@ const config: ControlPanelConfig = {
                         2,
                       ),
               }),
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                Boolean(controls?.comments_enabled?.value),
             },
           },
         ],
@@ -825,6 +854,9 @@ const config: ControlPanelConfig = {
               description: t(
                 'Helper only: array of {"view_column":"...","target_column":"..."}. Copy into comment_config.key_mapping.',
               ),
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                Boolean(controls?.comments_enabled?.value),
+              resetOnHide: false,
             },
           },
         ],
@@ -842,6 +874,9 @@ const config: ControlPanelConfig = {
               description: t(
                 'Helper only: array of editable field configs. Copy into comment_config.fields.',
               ),
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                Boolean(controls?.comments_enabled?.value),
+              resetOnHide: false,
             },
           },
         ],
@@ -860,11 +895,19 @@ const config: ControlPanelConfig = {
     const {
       comment_key_mapping_json: _commentKeyMappingJson,
       comment_fields_json: _commentFieldsJson,
+      comments_enabled,
       ...cleanFormData
     } = formData;
+    const parsedCommentConfig = parseJsonObject(formData.comment_config) as
+      | Record<string, unknown>
+      | undefined;
     return {
       ...cleanFormData,
-      comment_config: parseJsonObject(formData.comment_config),
+      comment_config: {
+        ...DEFAULT_COMMENT_CONFIG,
+        ...(parsedCommentConfig || {}),
+        enabled: Boolean(comments_enabled),
+      },
       metrics: getStandardizedControls().popAllMetrics(),
       groupby: getStandardizedControls().popAllColumns(),
     };
