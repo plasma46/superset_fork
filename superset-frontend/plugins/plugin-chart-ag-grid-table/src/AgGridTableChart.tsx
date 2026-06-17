@@ -464,7 +464,11 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         !params.data || params.node?.rowPinned ? null : (
           <button
             type="button"
-            onClick={() => handleDeleteComment(params.data as DataRecord)}
+            onClick={() => {
+                if (window.confirm(t('Delete comment for this row?'))) {
+                  handleDeleteComment(params.data as DataRecord);
+                }
+              }}
           >
             {t('Delete')}
           </button>
