@@ -361,6 +361,11 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     emitCrossFilters,
     alignPositiveNegative,
     slice_id,
+    commentConfig,
+    dirtyState: commentsEnabled ? dirtyState : undefined,
+    invalidCells: commentsEnabled ? invalidCells : undefined,
+    dynamicOptions: commentsEnabled ? dynamicOptions : undefined,
+    updateCommentValue: commentsEnabled ? updateCommentValue : undefined,
   });
 
   const updateCommentValue = useCallback(
@@ -425,7 +430,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
   );
 
   const commentColDefs = useMemo<ColDef[]>(() => {
-    if (!commentsEnabled || !commentConfig) {
+    if (!commentsEnabled) {
       return colDefs as ColDef[];
     }
 
@@ -445,108 +450,6 @@ export default function TableChart<D extends DataRecord = DataRecord>(
       resizable: false,
       suppressMenu: true,
     };
-
-    const editableCols = (commentConfig.fields || []).map(field => ({
-      colId: getCommentFieldColId(field),
-      field: getCommentFieldColId(field),
-      headerName: field.view_column,
-      minWidth: 160,
-      sortable: false,
-      filter: false,
-      cellRenderer: (params: ICellRendererParams) => {
-        if (!params.data || params.node?.rowPinned) {
-          return null;
-        }
-        const row = params.data as DataRecord;
-        const rowIndex = params.rowIndex;
-        const dirtyValue = dirtyState[rowIndex]?.[field.target_column];
-        const value = dirtyValue ?? row[field.view_column] ?? '';
-        const invalidKey = `${rowIndex}:${field.target_column}`;
-        const hasError = Boolean(invalidCells[invalidKey]);
-        const commonStyle = {
-          width: '100%',
-          minHeight: 24,
-          border: hasError ? '1px solid #d93025' : '1px solid #d9d9d9',
-          borderRadius: 4,
-          padding: '0 6px',
-        };
-
-        if (field.type === 'dropdown_static' || field.type === 'dropdown_dynamic') {
-          const options =
-            field.type === 'dropdown_static'
-              ? field.options || []
-              : dynamicOptions[field.target_column] || [];
-          return (
-            <select
-              aria-label={field.view_column}
-              style={commonStyle}
-              value={String(value ?? '')}
-              onChange={event =>
-                updateCommentValue(
-                  rowIndex,
-                  field,
-                  getOptionValue(options, event.currentTarget.value),
-                )
-              }
-            >
-              <option value="" />
-              {options.map(option => (
-                <option
-                  key={String(option.value)}
-                  value={String(option.value)}
-                >
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          );
-        }
-
-        if (field.type === 'number') {
-          return (
-            <input
-              aria-label={field.view_column}
-              style={commonStyle}
-              type="number"
-              value={String(value ?? '')}
-              onKeyPress={event => {
-                if (!/[\d.-]/.test(event.key)) event.preventDefault();
-              }}
-              onChange={event => {
-                const nextValue = event.currentTarget.value;
-                updateCommentValue(
-                  rowIndex,
-                  field,
-                  nextValue,
-                  !isNumericInput(nextValue),
-                );
-              }}
-            />
-          );
-        }
-
-        return (
-          <textarea
-            aria-label={field.view_column}
-            rows={1}
-            style={{
-              ...commonStyle,
-              resize: 'none',
-              overflow: 'hidden',
-              lineHeight: '1.4',
-              boxSizing: 'border-box',
-            }}
-            value={String(value ?? '')}
-            onChange={event => {
-              const el = event.currentTarget;
-              el.style.height = 'auto';
-              el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-              updateCommentValue(rowIndex, field, el.value);
-            }}
-          />
-        );
-      },
-    }));
 
     const actionCol: ColDef = {
       colId: COMMENT_ACTION_COL_ID,
@@ -568,17 +471,8 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         ),
     };
 
-    return [selectCol, ...(colDefs as ColDef[]), ...editableCols, actionCol];
-  }, [
-    colDefs,
-    commentConfig,
-    commentsEnabled,
-    dirtyState,
-    dynamicOptions,
-    invalidCells,
-    handleDeleteComment,
-    updateCommentValue,
-  ]);
+    return [selectCol, ...(colDefs as ColDef[]), actionCol];
+  }, [colDefs, handleDeleteComment, commentsEnabled]);
 
   const gridHeight = getGridHeight(height, includeSearch);
 

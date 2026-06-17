@@ -42,6 +42,31 @@ export function getCommentFieldColId(field: CommentFieldConfig): string {
   return `${COMMENT_FIELD_PREFIX}${field.target_column || field.view_column}`;
 }
 
+export function getCommentableFieldsMap(
+  config?: CommentConfig,
+): Map<string, CommentFieldConfig> {
+  const map = new Map<string, CommentFieldConfig>();
+  if (!config?.fields) {
+    return map;
+  }
+  config.fields.forEach(field => {
+    if (field.view_column) {
+      map.set(field.view_column, field);
+    }
+  });
+  return map;
+}
+
+export function getEditableField(
+  colKey: string,
+  config?: CommentConfig,
+): CommentFieldConfig | undefined {
+  if (!config?.fields) {
+    return undefined;
+  }
+  return config.fields.find(field => field.view_column === colKey);
+}
+
 export function isNumericInput(value: unknown): boolean {
   if (value === null || value === undefined || value === '') {
     return true;

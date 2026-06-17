@@ -29,6 +29,10 @@ import {
   CellRendererProps,
   InputColumn,
   ValueRange,
+  CommentConfig,
+  CommentDirtyState,
+  CommentFieldConfig,
+  CommentOption,
 } from '../types';
 import getCellClass from './getCellClass';
 import filterValueGetter from './filterValueGetter';
@@ -41,6 +45,8 @@ import CustomHeader from '../AgGridTable/components/CustomHeader';
 import { NOOP_FILTER_COMPARATOR } from '../consts';
 import { valueFormatter, valueGetter } from './formatValue';
 import getCellStyle from './getCellStyle';
+import { EditableCommentCellRenderer } from '../renderers/EditableCommentCellRenderer';
+import { getEditableField } from './commentEditing';
 
 interface InputData {
   [key: string]: DataRecordValue;
@@ -62,6 +68,16 @@ type UseColDefsProps = {
   emitCrossFilters?: boolean;
   alignPositiveNegative: boolean;
   slice_id: number;
+  commentConfig?: CommentConfig;
+  dirtyState?: CommentDirtyState;
+  invalidCells?: Record<string, boolean>;
+  dynamicOptions?: Record<string, CommentOption[]>;
+  updateCommentValue?: (
+    rowIndex: number,
+    field: CommentFieldConfig,
+    value: unknown,
+    invalid?: boolean,
+  ) => void;
 };
 
 function getValueRange(
@@ -225,6 +241,11 @@ export const useColDefs = ({
   emitCrossFilters,
   alignPositiveNegative,
   slice_id,
+  commentConfig,
+  dirtyState,
+  invalidCells,
+  dynamicOptions,
+  updateCommentValue,
 }: UseColDefsProps) => {
   const theme = useTheme();
   const getCommonColProps = useCallback(
@@ -276,6 +297,124 @@ export const useColDefs = ({
         getValueRange(originalKey, alignPN || alignPositiveNegative, data);
 
       const filter = getFilterType(col);
+
+      const editableField = getEditableField(col.key, commentConfig);
+
+      if (
+        editableField &&
+        updateCommentValue &&
+        dirtyState !== undefined
+      ) {
+        const baseCellRenderer = isBooleanColumn
+          ? 'agCheckboxCellRenderer'
+          : isTextColumn
+            ? TextCellRenderer
+            : NumericCellRenderer;
+
+        return {
+          field: colId,
+          headerName: getHeaderLabel(col),
+          valueFormatter: p => valueFormatter(p, col),
+          valueGetter: p => valueGetter(p, col),
+          cellStyle: p => {
+            const cellSurfaceColor =
+              p.node?.rowPinned != null
+                ? theme.colorBgBase
+                : p.rowIndex % 2 === 0
+                  ? theme.colorBgBase
+                  : theme.colorFillQuaternary;
+            const hoverCellSurfaceColor =
+              p.node?.rowPinned != null
+                ? cellSurfaceColor
+                : theme.colorFillSecondary;
+            const cellStyleParams = {
+              ...p,
+              hasColumnColorFormatters,
+              columnColorFormatters,
+              hasBasicColorFormatters,
+              basicColorFormatters,
+              col,
+              cellSurfaceColor,
+              hoverCellSurfaceColor,
+            } as Parameters<typeof getCellStyle>[0];
+
+            return getCellStyle(cellStyleParams);
+          },
+          cellClass: p =>
+            getCellClass({
+              ...p,
+              col,
+              emitCrossFilters,
+            }),
+          minWidth: config?.columnWidth ?? 100,
+          filter,
+          ...(isPercentMetric && {
+            filterValueGetter,
+          }),
+          ...(dataType === GenericDataType.Temporal && {
+            filterValueGetter: dateFilterValueGetter,
+            filterParams: serverPagination
+              ? {
+                  filterOptions: SERVER_SIDE_DATE_FILTER_OPTIONS,
+                  comparator: NOOP_FILTER_COMPARATOR,
+                }
+              : {
+                  comparator: dateFilterComparator,
+                },
+          }),
+          cellDataType: getCellDataType(col),
+          defaultAggFunc: getAggFunc(col),
+          initialAggFunc: getAggFunc(col),
+          ...(!(isMetric || isPercentMetric) && {
+            allowedAggFuncs: [
+              'sum',
+              'min',
+              'max',
+              'count',
+              'avg',
+              'first',
+              'last',
+            ],
+          }),
+          cellRenderer: (p: CellRendererProps) =>
+            EditableCommentCellRenderer({
+              ...p,
+              baseRenderer:
+                typeof baseCellRenderer === 'string'
+                  ? undefined
+                  : (p2: CellRendererProps) => baseCellRenderer(p2),
+              editableField,
+              dirtyState,
+              invalidCells,
+              dynamicOptions,
+              updateCommentValue,
+            }),
+          context: {
+            isMetric,
+            isPercentMetric,
+            isNumeric,
+          },
+          lockPinned: !allowRearrangeColumns,
+          sortable: !serverPagination || !isPercentMetric,
+          ...(serverPagination && {
+            headerComponent: CustomHeader,
+            comparator: () => 0,
+            headerComponentParams: {
+              slice_id,
+            },
+          }),
+          isMain,
+          ...(!isMain &&
+            originalLabel && {
+              columnGroupShow: 'open',
+            }),
+          ...(originalLabel && {
+            timeComparisonKey: originalLabel,
+          }),
+          wrapText: !config?.truncateLongCells,
+          autoHeight: !config?.truncateLongCells,
+        };
+      }
 
       return {
         field: colId,
@@ -405,6 +544,11 @@ export const useColDefs = ({
       theme.colorBgBase,
       theme.colorFillSecondary,
       theme.colorFillQuaternary,
+      commentConfig,
+      dirtyState,
+      invalidCells,
+      dynamicOptions,
+      updateCommentValue,
     ],
   );
 
