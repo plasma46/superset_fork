@@ -63,7 +63,6 @@ import {
   COMMENT_ACTION_COL_ID,
   COMMENT_SELECT_COL_ID,
   getCommentFieldColId,
-  getRowKey,
   isCommentsEnabled,
   isNumericInput,
 } from './utils/commentEditing';
@@ -366,14 +365,12 @@ export default function TableChart<D extends DataRecord = DataRecord>(
 
   const updateCommentValue = useCallback(
     (
-      row: DataRecord,
+      rowIndex: number,
       field: CommentFieldConfig,
       rawValue: unknown,
       invalid = false,
     ) => {
-      if (!commentConfig) return;
-      const rowKey = getRowKey(row, commentConfig);
-      const invalidKey = `${rowKey}:${field.target_column}`;
+      const invalidKey = `${rowIndex}:${field.target_column}`;
       setInvalidCells(current => ({
         ...current,
         [invalidKey]: invalid,
@@ -387,13 +384,13 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           : rawValue;
       setDirtyState(current => ({
         ...current,
-        [rowKey]: {
-          ...(current[rowKey] || {}),
+        [rowIndex]: {
+          ...(current[rowIndex] || {}),
           [field.target_column]: value,
         },
       }));
     },
-    [commentConfig],
+    [],
   );
 
   const handleDeleteComment = useCallback(
@@ -461,10 +458,10 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           return null;
         }
         const row = params.data as DataRecord;
-        const rowKey = getRowKey(row, commentConfig);
-        const dirtyValue = dirtyState[rowKey]?.[field.target_column];
+        const rowIndex = params.rowIndex;
+        const dirtyValue = dirtyState[rowIndex]?.[field.target_column];
         const value = dirtyValue ?? row[field.view_column] ?? '';
-        const invalidKey = `${rowKey}:${field.target_column}`;
+        const invalidKey = `${rowIndex}:${field.target_column}`;
         const hasError = Boolean(invalidCells[invalidKey]);
         const commonStyle = {
           width: '100%',
@@ -486,7 +483,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
               value={String(value ?? '')}
               onChange={event =>
                 updateCommentValue(
-                  row,
+                  rowIndex,
                   field,
                   getOptionValue(options, event.currentTarget.value),
                 )
@@ -505,28 +502,46 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           );
         }
 
+        if (field.type === 'number') {
+          return (
+            <input
+              aria-label={field.view_column}
+              style={commonStyle}
+              type="number"
+              value={String(value ?? '')}
+              onKeyPress={event => {
+                if (!/[\d.-]/.test(event.key)) event.preventDefault();
+              }}
+              onChange={event => {
+                const nextValue = event.currentTarget.value;
+                updateCommentValue(
+                  rowIndex,
+                  field,
+                  nextValue,
+                  !isNumericInput(nextValue),
+                );
+              }}
+            />
+          );
+        }
+
         return (
-          <input
+          <textarea
             aria-label={field.view_column}
-            style={commonStyle}
-            type={field.type === 'number' ? 'number' : 'text'}
-            value={String(value ?? '')}
-            onKeyPress={event => {
-              if (
-                field.type === 'number' &&
-                !/[\d.-]/.test(event.key)
-              ) {
-                event.preventDefault();
-              }
+            rows={1}
+            style={{
+              ...commonStyle,
+              resize: 'none',
+              overflow: 'hidden',
+              lineHeight: '1.4',
+              boxSizing: 'border-box',
             }}
+            value={String(value ?? '')}
             onChange={event => {
-              const nextValue = event.currentTarget.value;
-              updateCommentValue(
-                row,
-                field,
-                nextValue,
-                field.type === 'number' && !isNumericInput(nextValue),
-              );
+              const el = event.currentTarget;
+              el.style.height = 'auto';
+              el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+              updateCommentValue(rowIndex, field, el.value);
             }}
           />
         );
@@ -721,7 +736,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
       return;
     }
     setDirtyState(current =>
-      applyMassInput(current, selectedRows, commentConfig, field, massInputValue),
+      applyMassInput(current, selectedRows, data, field, massInputValue),
     );
     setMassInputOpen(false);
     setMassInputValue('');
@@ -817,7 +832,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
             marginBottom: 8,
           }}
         >
-          {selectedRows.length >= 2 && (
+          {commentConfig?.bulk_input && selectedRows.length >= 2 && (
             <button type="button" onClick={() => setMassInputOpen(true)}>
               {t('Mass input')}
             </button>

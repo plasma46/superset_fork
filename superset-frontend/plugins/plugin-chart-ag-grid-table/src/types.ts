@@ -169,9 +169,10 @@ export type CommentConfig = {
   key_mapping?: CommentKeyMapping[];
   fields?: CommentFieldConfig[];
   refresh_chart_id?: number;
+  bulk_input?: boolean;
 };
 
-export type CommentDirtyState = Record<string, Record<string, unknown>>;
+export type CommentDirtyState = Record<number, Record<string, unknown>>;
 
 export type CommentSaveRecord = {
   keys: Record<string, unknown>;

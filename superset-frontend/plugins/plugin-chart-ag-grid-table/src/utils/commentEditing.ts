@@ -77,16 +77,17 @@ export function getRowKey(row: DataRecord, config?: CommentConfig): string {
 export function applyMassInput(
   dirtyState: CommentDirtyState,
   rows: DataRecord[],
-  config: CommentConfig,
+  allData: DataRecord[],
   field: CommentFieldConfig,
   value: unknown,
 ): CommentDirtyState {
   return rows.reduce<CommentDirtyState>((nextState, row) => {
-    const rowKey = getRowKey(row, config);
+    const rowIndex = allData.indexOf(row);
+    if (rowIndex < 0) return nextState;
     return {
       ...nextState,
-      [rowKey]: {
-        ...(nextState[rowKey] || {}),
+      [rowIndex]: {
+        ...(nextState[rowIndex] || {}),
         [field.target_column]: coerceCommentValue(value, field),
       },
     };
@@ -98,16 +99,14 @@ export function buildCommentPayload(
   rows: DataRecord[],
   config: CommentConfig,
 ): { records: CommentSaveRecord[] } {
-  const rowByKey = new Map(rows.map(row => [getRowKey(row, config), row]));
   return {
     records: Object.entries(dirtyState)
-      .filter(([, fields]) => Object.keys(fields).length > 0)
-      .map(([rowKey, fields]) => {
-        const row = rowByKey.get(rowKey);
-        const parsedKeys = JSON.parse(rowKey);
+      .filter(([, fields]) => Object.keys(fields as Record<string, unknown>).length > 0)
+      .map(([rowIndexStr, fields]) => {
+        const row = rows[Number(rowIndexStr)];
         return {
-          keys: row ? getRowKeys(row, config) : parsedKeys,
-          fields,
+          keys: row ? getRowKeys(row, config) : {},
+          fields: fields as Record<string, unknown>,
           is_delete: false,
         };
       }),
