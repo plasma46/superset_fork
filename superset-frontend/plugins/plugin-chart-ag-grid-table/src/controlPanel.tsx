@@ -867,10 +867,10 @@ const config: ControlPanelConfig = {
                 const cols = (datasource?.columns ?? []) as Array<{
                   column_name?: string;
                 }>;
-                const choices = cols
+                const options = cols
                   .filter(c => c.column_name)
-                  .map(c => [c.column_name!, c.column_name!] as [string, string]);
-                return { choices, value: [] };
+                  .map(c => ({ value: c.column_name!, label: c.column_name! }));
+                return { options, value: [] };
               },
               visibility: isCommentsEnabledControl,
               resetOnHide: false,
