@@ -194,18 +194,6 @@ const percentMetricsControl: typeof sharedControls.metrics = {
   validators: [],
 };
 
-const validateJsonArray = (value: string | undefined) => {
-  if (!value) {
-    return [];
-  }
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? [] : [t('Must be a JSON array')];
-  } catch {
-    return [t('Must be valid JSON')];
-  }
-};
-
 const parseJsonObject = (value: unknown) => {
   if (!value || typeof value !== 'string') {
     return value;
@@ -850,7 +838,6 @@ const config: ControlPanelConfig = {
               language: 'json',
               height: 120,
               default: '[]',
-              validators: [validateJsonArray],
               description: t(
                 'Helper only: array of {"view_column":"...","target_column":"..."}. Copy into comment_config.key_mapping.',
               ),
@@ -870,7 +857,6 @@ const config: ControlPanelConfig = {
               language: 'json',
               height: 180,
               default: '[]',
-              validators: [validateJsonArray],
               description: t(
                 'Helper only: array of editable field configs. Copy into comment_config.fields.',
               ),
