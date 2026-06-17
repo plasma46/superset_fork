@@ -155,10 +155,14 @@ export type CommentFieldConfig = {
   view_column: string;
   target_column: string;
   type: CommentFieldType;
+  // dropdown_static
   options?: CommentOption[];
-  dataset_id?: number;
-  value_column?: string;
-  label_column?: string;
+  // dropdown_dynamic — fetched directly from DB
+  options_database_id?: number;
+  options_schema?: string;
+  options_table?: string;
+  options_value_column?: string;
+  options_label_column?: string;
 };
 
 export type CommentConfig = {

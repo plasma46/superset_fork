@@ -869,7 +869,7 @@ const config: ControlPanelConfig = {
                 }>;
                 const choices = cols
                   .filter(c => c.column_name)
-                  .map(c => ({ value: c.column_name!, label: c.column_name! }));
+                  .map(c => [c.column_name!, c.column_name!] as [string, string]);
                 return { choices, value: [] };
               },
               visibility: isCommentsEnabledControl,

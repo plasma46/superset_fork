@@ -55,6 +55,7 @@ from superset.charts.schemas import (
     screenshot_query_schema,
     thumbnail_query_schema,
 )
+from superset.commands.chart.comment_options import GetCommentOptionsCommand
 from superset.commands.chart.comments import InsertChartCommentsCommand
 from superset.commands.chart.create import CreateChartCommand
 from superset.commands.chart.delete import DeleteChartCommand
@@ -1097,6 +1098,59 @@ class ChartRestApi(BaseSupersetModelRestApi):
             return self.response_422(message=str(ex))
 
         return self.response(200, inserted=inserted)
+
+    @expose("/<int:pk>/comments/options/<string:target_column>", methods=("GET",))
+    @protect()
+    @safe
+    @statsd_metrics
+    def get_comment_options(self, pk: int, target_column: str) -> Response:
+        """Fetch dropdown options for a dropdown_dynamic comment field.
+        ---
+        get:
+          summary: Get dropdown options for a dynamic comment field
+          parameters:
+          - in: path
+            name: pk
+            schema:
+              type: integer
+          - in: path
+            name: target_column
+            schema:
+              type: string
+          responses:
+            200:
+              description: List of options
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      options:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            value: {}
+                            label:
+                              type: string
+            400:
+              $ref: '#/components/responses/400'
+            403:
+              $ref: '#/components/responses/403'
+            404:
+              $ref: '#/components/responses/404'
+        """
+        try:
+            options = GetCommentOptionsCommand(pk, target_column).run()
+        except ChartNotFoundError:
+            return self.response_404()
+        except CommentsForbiddenError as ex:
+            return self.response_403(message=str(ex))
+        except CommentsConfigError as ex:
+            return self.response_400(message=str(ex))
+        except CommentsDatabaseNotFoundError as ex:
+            return self.response_404(message=str(ex))
+        return self.response(200, options=options)
 
     @expose("/warm_up_cache", methods=("PUT",))
     @protect()

@@ -93,27 +93,15 @@ const normalizeCommentConfig = (
 
 const getDynamicOptions = async (
   field: CommentFieldConfig,
+  chartId: number,
 ): Promise<CommentOption[]> => {
-  if (!field.dataset_id || !field.value_column || !field.label_column) {
+  if (!field.options_table || !field.options_value_column) {
     return [];
   }
   const { json } = await SupersetClient.get({
-    endpoint: `/api/v1/dataset/${field.dataset_id}/data/`,
+    endpoint: `/api/v1/chart/${chartId}/comments/options/${encodeURIComponent(field.target_column)}`,
   });
-  const rows =
-    json?.result?.data ||
-    json?.result?.records ||
-    json?.data ||
-    json?.records ||
-    [];
-  return Array.isArray(rows)
-    ? rows.map((row: Record<string, unknown>) => ({
-        value: row[field.value_column!],
-        label: String(
-          row[field.label_column!] ?? row[field.value_column!] ?? '',
-        ),
-      }))
-    : [];
+  return Array.isArray(json?.options) ? json.options : [];
 };
 
 const getOptionValue = (
@@ -214,7 +202,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         if (dynamicOptions[fieldKey]) {
           return;
         }
-        getDynamicOptions(field)
+        getDynamicOptions(field, slice_id)
           .then(options =>
             setDynamicOptions(current => ({
               ...current,
