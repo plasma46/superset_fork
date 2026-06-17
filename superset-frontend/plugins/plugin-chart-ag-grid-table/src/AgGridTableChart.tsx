@@ -343,31 +343,6 @@ export default function TableChart<D extends DataRecord = DataRecord>(
       .filter(col => col?.config?.visible !== false);
   }, [columns, selectedComparisonColumns]);
 
-  const colDefs = useColDefs({
-    columns: isUsingTimeComparison
-      ? (filteredColumns as InputColumn[])
-      : (columns as InputColumn[]),
-    data,
-    serverPagination,
-    isRawRecords,
-    defaultAlignPN: alignPositiveNegative,
-    showCellBars,
-    colorPositiveNegative,
-    totals,
-    columnColorFormatters,
-    allowRearrangeColumns,
-    basicColorFormatters,
-    isUsingTimeComparison,
-    emitCrossFilters,
-    alignPositiveNegative,
-    slice_id,
-    commentConfig,
-    dirtyState: commentsEnabled ? dirtyState : undefined,
-    invalidCells: commentsEnabled ? invalidCells : undefined,
-    dynamicOptions: commentsEnabled ? dynamicOptions : undefined,
-    updateCommentValue: commentsEnabled ? updateCommentValue : undefined,
-  });
-
   const updateCommentValue = useCallback(
     (
       rowIndex: number,
@@ -397,6 +372,31 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     },
     [],
   );
+
+  const colDefs = useColDefs({
+    columns: isUsingTimeComparison
+      ? (filteredColumns as InputColumn[])
+      : (columns as InputColumn[]),
+    data,
+    serverPagination,
+    isRawRecords,
+    defaultAlignPN: alignPositiveNegative,
+    showCellBars,
+    colorPositiveNegative,
+    totals,
+    columnColorFormatters,
+    allowRearrangeColumns,
+    basicColorFormatters,
+    isUsingTimeComparison,
+    emitCrossFilters,
+    alignPositiveNegative,
+    slice_id,
+    commentConfig,
+    dirtyState: commentsEnabled ? dirtyState : undefined,
+    invalidCells: commentsEnabled ? invalidCells : undefined,
+    dynamicOptions: commentsEnabled ? dynamicOptions : undefined,
+    updateCommentValue: commentsEnabled ? updateCommentValue : undefined,
+  });
 
   const handleDeleteComment = useCallback(
     async (row: DataRecord) => {
