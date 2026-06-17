@@ -854,6 +854,31 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'comment_dataset_columns',
+            config: {
+              type: 'SelectControl',
+              label: t('Dataset columns (reference)'),
+              multi: true,
+              description: t(
+                'Read-only reference — shows all columns in the dataset. ' +
+                  'Use these names in "view_column" fields below.',
+              ),
+              mapStateToProps: ({ datasource }) => {
+                const cols = (datasource?.columns ?? []) as Array<{
+                  column_name?: string;
+                }>;
+                const choices = cols
+                  .filter(c => c.column_name)
+                  .map(c => ({ value: c.column_name!, label: c.column_name! }));
+                return { choices, value: [] };
+              },
+              visibility: isCommentsEnabledControl,
+              resetOnHide: false,
+            },
+          },
+        ],
+        [
+          {
             name: 'comment_key_mapping_json',
             config: {
               type: 'TextAreaControl',
@@ -976,6 +1001,7 @@ const config: ControlPanelConfig = {
       comment_db_id,
       comment_schema,
       comment_table,
+      comment_dataset_columns: _commentDatasetColumns,
       comment_key_mapping_json,
       comment_fields_json,
       comment_bulk_input,
@@ -988,6 +1014,7 @@ const config: ControlPanelConfig = {
       comment_db_id?: string | number;
       comment_schema?: string;
       comment_table?: string;
+      comment_dataset_columns?: unknown;
       comment_key_mapping_json?: string;
       comment_fields_json?: string;
       comment_bulk_input?: boolean;
