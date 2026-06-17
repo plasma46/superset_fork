@@ -205,16 +205,6 @@ const parseJsonObject = (value: unknown) => {
   }
 };
 
-const DEFAULT_COMMENT_CONFIG = {
-  enabled: false,
-  database_id: undefined,
-  schema: '',
-  table: '',
-  key_mapping: [],
-  fields: [],
-  refresh_chart_id: undefined,
-};
-
 const getCommentConfigEnabled = (commentConfig: unknown): boolean => {
   const parsed =
     typeof commentConfig === 'string'
@@ -222,6 +212,11 @@ const getCommentConfigEnabled = (commentConfig: unknown): boolean => {
       : commentConfig;
   return Boolean((parsed as { enabled?: boolean } | undefined)?.enabled);
 };
+
+const isCommentsEnabledControl = ({
+  controls,
+}: Pick<ControlPanelsContainerProps, 'controls'>) =>
+  Boolean(controls?.comments_enabled?.value);
 
 /*
 Options for row limit control
@@ -790,9 +785,7 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               default: false,
               description: t(
-                'If unchecked, this table behaves as a regular table with no ' +
-                  'editable comment columns, and the JSON settings below are ' +
-                  'hidden and not validated.',
+                'Enable editable comment columns in this table.',
               ),
               mapStateToProps: ({ form_data }) => ({
                 value: getCommentConfigEnabled(form_data.comment_config),
@@ -802,29 +795,60 @@ const config: ControlPanelConfig = {
         ],
         [
           {
-            name: 'comment_config',
+            name: 'comment_db_id',
             config: {
-              type: 'TextAreaControl',
-              label: t('Comments configuration'),
+              type: 'TextControl',
+              label: t('Comments database ID'),
               renderTrigger: true,
-              language: 'json',
-              height: 260,
-              default: JSON.stringify(DEFAULT_COMMENT_CONFIG, null, 2),
+              isInt: true,
+              default: '',
               description: t(
-                'JSON config for editable comments. Backend reads this from form_data.comment_config.',
+                'ID of the database where the comments table is stored. ' +
+                  'Find it in Settings → Database Connections.',
               ),
-              mapStateToProps: ({ form_data }) => ({
-                value:
-                  typeof form_data.comment_config === 'string'
-                    ? form_data.comment_config
-                    : JSON.stringify(
-                        form_data.comment_config ?? DEFAULT_COMMENT_CONFIG,
-                        null,
-                        2,
-                      ),
-              }),
-              visibility: ({ controls }: ControlPanelsContainerProps) =>
-                Boolean(controls?.comments_enabled?.value),
+              mapStateToProps: ({ form_data }) => {
+                const cfg = parseJsonObject(form_data.comment_config) as
+                  | Record<string, unknown>
+                  | undefined;
+                return { value: cfg?.database_id ?? '' };
+              },
+              visibility: isCommentsEnabledControl,
+            },
+          },
+        ],
+        [
+          {
+            name: 'comment_schema',
+            config: {
+              type: 'TextControl',
+              label: t('Comments schema'),
+              renderTrigger: true,
+              default: '',
+              description: t('Database schema of the comments table.'),
+              mapStateToProps: ({ form_data }) => {
+                const cfg = parseJsonObject(form_data.comment_config) as
+                  | Record<string, unknown>
+                  | undefined;
+                return { value: cfg?.schema ?? '' };
+              },
+              visibility: isCommentsEnabledControl,
+            },
+          },
+          {
+            name: 'comment_table',
+            config: {
+              type: 'TextControl',
+              label: t('Comments table'),
+              renderTrigger: true,
+              default: '',
+              description: t('Name of the table where comments are stored.'),
+              mapStateToProps: ({ form_data }) => {
+                const cfg = parseJsonObject(form_data.comment_config) as
+                  | Record<string, unknown>
+                  | undefined;
+                return { value: cfg?.table ?? '' };
+              },
+              visibility: isCommentsEnabledControl,
             },
           },
         ],
@@ -833,16 +857,28 @@ const config: ControlPanelConfig = {
             name: 'comment_key_mapping_json',
             config: {
               type: 'TextAreaControl',
-              label: t('Key mapping JSON helper'),
+              label: t('Key mapping'),
               renderTrigger: true,
               language: 'json',
               height: 120,
               default: '[]',
               description: t(
-                'Helper only: array of {"view_column":"...","target_column":"..."}. Copy into comment_config.key_mapping.',
+                'Array of {"view_column":"<dataset col>","target_column":"<comments table col>"}. ' +
+                  'Identifies the row when saving a comment.',
               ),
-              visibility: ({ controls }: ControlPanelsContainerProps) =>
-                Boolean(controls?.comments_enabled?.value),
+              mapStateToProps: ({ form_data }) => {
+                const cfg = parseJsonObject(form_data.comment_config) as
+                  | Record<string, unknown>
+                  | undefined;
+                const km = cfg?.key_mapping;
+                return {
+                  value:
+                    km != null
+                      ? JSON.stringify(km, null, 2)
+                      : '[]',
+                };
+              },
+              visibility: isCommentsEnabledControl,
               resetOnHide: false,
             },
           },
@@ -852,17 +888,74 @@ const config: ControlPanelConfig = {
             name: 'comment_fields_json',
             config: {
               type: 'TextAreaControl',
-              label: t('Fields JSON helper'),
+              label: t('Comment fields'),
               renderTrigger: true,
               language: 'json',
               height: 180,
               default: '[]',
               description: t(
-                'Helper only: array of editable field configs. Copy into comment_config.fields.',
+                'Array of editable field configs. Each item: ' +
+                  '{"view_column":"<col in dataset>","target_column":"<col in comments table>",' +
+                  '"type":"text|number|dropdown_static|dropdown_dynamic",' +
+                  '"options":[{"value":"...","label":"..."}]}.',
               ),
-              visibility: ({ controls }: ControlPanelsContainerProps) =>
-                Boolean(controls?.comments_enabled?.value),
+              mapStateToProps: ({ form_data }) => {
+                const cfg = parseJsonObject(form_data.comment_config) as
+                  | Record<string, unknown>
+                  | undefined;
+                const fields = cfg?.fields;
+                return {
+                  value:
+                    fields != null
+                      ? JSON.stringify(fields, null, 2)
+                      : '[]',
+                };
+              },
+              visibility: isCommentsEnabledControl,
               resetOnHide: false,
+            },
+          },
+        ],
+        [
+          {
+            name: 'comment_bulk_input',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Enable mass input'),
+              renderTrigger: true,
+              default: false,
+              description: t(
+                'Show "Mass input" button to apply one value to all selected rows at once.',
+              ),
+              mapStateToProps: ({ form_data }) => {
+                const cfg = parseJsonObject(form_data.comment_config) as
+                  | Record<string, unknown>
+                  | undefined;
+                return { value: Boolean(cfg?.bulk_input) };
+              },
+              visibility: isCommentsEnabledControl,
+            },
+          },
+        ],
+        [
+          {
+            name: 'comment_refresh_chart_id',
+            config: {
+              type: 'TextControl',
+              label: t('Refresh chart ID (optional)'),
+              renderTrigger: true,
+              isInt: true,
+              default: '',
+              description: t(
+                'After saving comments, automatically refresh this chart by ID.',
+              ),
+              mapStateToProps: ({ form_data }) => {
+                const cfg = parseJsonObject(form_data.comment_config) as
+                  | Record<string, unknown>
+                  | undefined;
+                return { value: cfg?.refresh_chart_id ?? '' };
+              },
+              visibility: isCommentsEnabledControl,
             },
           },
         ],
@@ -879,20 +972,58 @@ const config: ControlPanelConfig = {
   ],
   formDataOverrides: formData => {
     const {
-      comment_key_mapping_json: _commentKeyMappingJson,
-      comment_fields_json: _commentFieldsJson,
       comments_enabled,
+      comment_db_id,
+      comment_schema,
+      comment_table,
+      comment_key_mapping_json,
+      comment_fields_json,
+      comment_bulk_input,
+      comment_refresh_chart_id,
+      // drop legacy monolithic field if still present
+      comment_config: _legacyCommentConfig,
       ...cleanFormData
-    } = formData;
-    const parsedCommentConfig = parseJsonObject(formData.comment_config) as
-      | Record<string, unknown>
-      | undefined;
+    } = formData as typeof formData & {
+      comments_enabled?: boolean;
+      comment_db_id?: string | number;
+      comment_schema?: string;
+      comment_table?: string;
+      comment_key_mapping_json?: string;
+      comment_fields_json?: string;
+      comment_bulk_input?: boolean;
+      comment_refresh_chart_id?: string | number;
+      comment_config?: unknown;
+    };
+
+    const parseArray = (raw: unknown): unknown[] => {
+      try {
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    };
+
+    const dbId =
+      comment_db_id !== '' && comment_db_id != null
+        ? Number(comment_db_id)
+        : undefined;
+    const refreshId =
+      comment_refresh_chart_id !== '' && comment_refresh_chart_id != null
+        ? Number(comment_refresh_chart_id)
+        : undefined;
+
     return {
       ...cleanFormData,
       comment_config: {
-        ...DEFAULT_COMMENT_CONFIG,
-        ...(parsedCommentConfig || {}),
         enabled: Boolean(comments_enabled),
+        database_id: dbId,
+        schema: comment_schema ?? '',
+        table: comment_table ?? '',
+        key_mapping: parseArray(comment_key_mapping_json),
+        fields: parseArray(comment_fields_json),
+        bulk_input: Boolean(comment_bulk_input),
+        ...(refreshId != null ? { refresh_chart_id: refreshId } : {}),
       },
       metrics: getStandardizedControls().popAllMetrics(),
       groupby: getStandardizedControls().popAllColumns(),
