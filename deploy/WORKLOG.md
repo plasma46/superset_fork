@@ -217,6 +217,19 @@ CREATE TABLE demo_comments (
 - Создан `deploy/assign_comments_permission.py` — назначает `can_write`/`Comments` роли Admin (запускать через `docker exec -i superset_app superset shell < deploy/assign_comments_permission.py` после деплоя, т.к. FAB создаёт permission но не назначает его ролям автоматически).
 - Дальше: полный деплой (`docker compose up --build`) + назначение permission + ручная E2E проверка (создать чарт, настроить comment_config, сохранить комментарий, проверить запись в БД).
 
+### 2026-06-17 — Agent-1 (BACK-6: embed comment fields into native dataset columns)
+- Рефакторинг system комментариев завершён:
+  - `src/renderers/EditableCommentCellRenderer.tsx` (новый) — универсальный компонент для editable UI (text/number/dropdown), поддерживает все 4 типа полей
+  - `src/utils/commentEditing.ts` — добавлены `getEditableField()` и `getCommentableFieldsMap()` для поиска editable полей в config
+  - `src/utils/useColDefs.ts` — расширена функция чтобы при построении colDefs встраивать editable renderer в существующие колонки датасета (если view_column совпадает)
+  - `src/AgGridTableChart.tsx` — удалены `editableCols` (дополнительные колонки), теперь передаются commentConfig параметры в useColDefs
+  - `test/renderers/EditableCommentCellRenderer.test.tsx` (новый) — 11 unit-тестов для renderer логики
+- Результат: comment-поля больше не добавляются как отдельные колонки — они встроены в existing colDefs, поэтому видны в Control Panel "Customize columns" и поддерживают алиасы/форматирование
+- Коммиты: 91cb0f4ff2 (реализация BACK-6), bf2d35e3de (обновление документации), c5cbb799e2 (тесты)
+- Backend-контракт не изменился, API `/api/v1/chart/{id}/comments` остаётся без изменений
+- Ветка: fork-base-6.1.0 (впереди master)
+- Next: деплой на сервер и E2E тестирование
+
 ### 2026-06-17 — Agent-1 (bugfix: кнопка Create заблокирована)
 - Симптом: при создании нового чарта Table V2 кнопка «Создать» оставалась неактивной после добавления колонок.
 - Причина: `comment_key_mapping_json` и `comment_fields_json` имели `validators: [validateJsonArray]` + `resetOnHide: false`. Superset сохраняет состояние и валидаторы скрытых контролов с `resetOnHide: false`, что блокировало форму даже когда секция Comments отключена.
