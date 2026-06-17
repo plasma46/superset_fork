@@ -217,6 +217,11 @@ CREATE TABLE demo_comments (
 - Создан `deploy/assign_comments_permission.py` — назначает `can_write`/`Comments` роли Admin (запускать через `docker exec -i superset_app superset shell < deploy/assign_comments_permission.py` после деплоя, т.к. FAB создаёт permission но не назначает его ролям автоматически).
 - Дальше: полный деплой (`docker compose up --build`) + назначение permission + ручная E2E проверка (создать чарт, настроить comment_config, сохранить комментарий, проверить запись в БД).
 
+### 2026-06-17 — Agent-1 (bugfix: кнопка Create заблокирована)
+- Симптом: при создании нового чарта Table V2 кнопка «Создать» оставалась неактивной после добавления колонок.
+- Причина: `comment_key_mapping_json` и `comment_fields_json` имели `validators: [validateJsonArray]` + `resetOnHide: false`. Superset сохраняет состояние и валидаторы скрытых контролов с `resetOnHide: false`, что блокировало форму даже когда секция Comments отключена.
+- Фикс: убраны `validators` из обоих хелпер-контролов и неиспользуемая функция `validateJsonArray`. Коммит `55336a3411`, задеплоено.
+
 ---
 
 ## Архивация
