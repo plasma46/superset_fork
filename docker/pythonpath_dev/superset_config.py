@@ -105,6 +105,11 @@ class CeleryConfig:
 
 CELERY_CONFIG = CeleryConfig
 
+LANGUAGES = {
+    "en": {"flag": "us", "name": "English"},
+    "ru": {"flag": "ru", "name": "Русский"},
+}
+
 FEATURE_FLAGS = {
     "ALERT_REPORTS": True,
     "AG_GRID_TABLE_ENABLED": True,
