@@ -1,4 +1,3 @@
-import { t } from '@superset-ui/core';
 import {
   ControlPanelConfig,
   sharedControls,
@@ -8,7 +7,7 @@ import { validateNonEmpty } from '@superset-ui/core';
 const controlPanel: ControlPanelConfig = {
   controlPanelSections: [
     {
-      label: t('Запрос'),
+      label: 'Запрос',
       expanded: true,
       controlSetRows: [
         [
@@ -16,10 +15,8 @@ const controlPanel: ControlPanelConfig = {
             name: 'stageColumn',
             config: {
               ...sharedControls.entity,
-              label: t('Колонка этапа / периода'),
-              description: t(
-                'Колонка для горизонтальных этапов: дата отчёта, месяц, период',
-              ),
+              label: 'Колонка этапа / периода',
+              description: 'Колонка для горизонтальной оси: дата, месяц, период',
               validators: [validateNonEmpty],
             },
           },
@@ -29,10 +26,8 @@ const controlPanel: ControlPanelConfig = {
             name: 'flowColumns',
             config: {
               ...sharedControls.groupby,
-              label: t('Группировка потока'),
-              description: t(
-                'Колонки, которые определяют один поток. Например: сегмент или сегмент + продукт',
-              ),
+              label: 'Группировка потоков',
+              description: 'Колонки, которые определяют один поток. Например: категория или продукт + регион',
               validators: [validateNonEmpty],
             },
           },
@@ -43,7 +38,7 @@ const controlPanel: ControlPanelConfig = {
       ],
     },
     {
-      label: t('Настройки графика'),
+      label: 'Настройки графика',
       expanded: true,
       controlSetRows: [
         ['color_scheme'],
@@ -52,13 +47,13 @@ const controlPanel: ControlPanelConfig = {
             name: 'zoom',
             config: {
               type: 'SliderControl',
-              label: t('Масштаб'),
+              label: 'Масштаб',
               default: 1,
               min: 0.5,
               max: 2,
               step: 0.1,
               renderTrigger: true,
-              description: t('Управляет визуальным масштабом графика'),
+              description: 'Масштабирование элементов графика',
             },
           },
         ],
@@ -67,13 +62,13 @@ const controlPanel: ControlPanelConfig = {
             name: 'minColumnGap',
             config: {
               type: 'SliderControl',
-              label: t('Расстояние между столбцами'),
+              label: 'Расстояние между периодами',
               default: 200,
               min: 100,
               max: 350,
               step: 5,
               renderTrigger: true,
-              description: t('Горизонтальное расстояние между периодами'),
+              description: 'Горизонтальное расстояние между периодами',
             },
           },
         ],
@@ -82,16 +77,14 @@ const controlPanel: ControlPanelConfig = {
             name: 'maxRows',
             config: {
               type: 'NumberControl',
-              label: t('Максимум строк'),
+              label: 'Максимум строк',
               default: '',
               min: 1,
               max: 50,
               step: 1,
               isInt: true,
               renderTrigger: true,
-              description: t(
-                'Максимальное количество строк на один период. Оставьте пустым, чтобы показать все строки',
-              ),
+              description: 'Максимальное количество строк на один период. Оставьте пустым, чтобы показать все записи',
             },
           },
         ],
@@ -100,12 +93,12 @@ const controlPanel: ControlPanelConfig = {
             name: 'sortDirection',
             config: {
               type: 'SelectControl',
-              label: t('Направление ранжирования'),
+              label: 'Направление сортировки',
               default: 'desc',
               renderTrigger: true,
               choices: [
-                ['desc', t('Большие значения сверху')],
-                ['asc', t('Малые значения сверху')],
+                ['desc', 'Высшее значение сверху'],
+                ['asc', 'Низшее значение сверху'],
               ],
             },
           },
@@ -115,7 +108,7 @@ const controlPanel: ControlPanelConfig = {
             name: 'valueFormat',
             config: {
               type: 'TextControl',
-              label: t('Формат значения'),
+              label: 'Формат значения',
               default: '~s',
               renderTrigger: true,
             },
@@ -124,7 +117,7 @@ const controlPanel: ControlPanelConfig = {
             name: 'dateFormat',
             config: {
               type: 'TextControl',
-              label: t('Формат подписи периода'),
+              label: 'Формат метки периода',
               default: '%d/%m/%y',
               renderTrigger: true,
             },
@@ -135,8 +128,8 @@ const controlPanel: ControlPanelConfig = {
             name: 'labelSeparator',
             config: {
               type: 'TextControl',
-              label: t('Разделитель групп'),
-              default: ' · ',
+              label: 'Разделитель групп',
+              default: ' ÷ ',
               renderTrigger: true,
             },
           },
@@ -146,13 +139,24 @@ const controlPanel: ControlPanelConfig = {
             name: 'colorBy',
             config: {
               type: 'SelectControl',
-              label: t('Цвет по'),
+              label: 'Цвет по',
               default: 'first_group_column',
               renderTrigger: true,
               choices: [
-                ['first_group_column', t('Первой колонке группировки')],
-                ['full_flow', t('Полной комбинации групп')],
+                ['first_group_column', 'Первой колонке группировки'],
+                ['full_flow', 'Полной комбинации потока'],
               ],
+            },
+          },
+        ],
+        [
+          {
+            name: 'showLegend',
+            config: {
+              type: 'CheckboxControl',
+              label: 'Показать легенду',
+              default: true,
+              renderTrigger: true,
             },
           },
         ],
