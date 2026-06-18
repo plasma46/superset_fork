@@ -1,5 +1,5 @@
 {
-  "name": "plugin-chart-rank-flow",
+  "name": "@superset-ui/plugin-chart-rank-flow",
   "version": "0.1.0",
   "description": "Plugin Chart Rank Flow",
   "sideEffects": false,

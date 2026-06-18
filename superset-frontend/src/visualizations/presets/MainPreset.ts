@@ -87,7 +87,7 @@ import { PivotTableChartPlugin as PivotTableChartPluginV2 } from '@superset-ui/p
 import { HandlebarsChartPlugin } from '@superset-ui/plugin-chart-handlebars';
 import { ChartCustomizationPlugins, FilterPlugins } from 'src/constants';
 import AgGridTableChartPlugin from '@superset-ui/plugin-chart-ag-grid-table';
-import { RankFlowChartPlugin } from '../../plugins/plugin-chart-rank-flow/src';
+import { RankFlowChartPlugin } from '@superset-ui/plugin-chart-rank-flow';
 import TimeTableChartPlugin from '../TimeTable';
 
 export default class MainPreset extends Preset {
