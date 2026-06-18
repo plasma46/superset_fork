@@ -479,7 +479,12 @@ const Chart = (props: ChartProps) => {
   (formData as JsonObject).dashboardId = dashboardInfo.id;
 
   const exportTable = useCallback(
-    (format: string, isFullCSV: boolean, isPivot = false) => {
+    (
+      format: string,
+      isFullCSV: boolean,
+      isPivot = false,
+      includeDashboardFiltersInExcel = false,
+    ) => {
       const logAction =
         format === 'csv'
           ? LOG_ACTIONS_EXPORT_CSV_DASHBOARD_CHART
@@ -489,9 +494,11 @@ const Chart = (props: ChartProps) => {
         is_cached: isCached,
       });
 
-      const exportFormData = isFullCSV
-        ? { ...formData, row_limit: maxRows }
-        : formData;
+      const exportFormData = {
+        ...(isFullCSV ? { ...formData, row_limit: maxRows } : formData),
+        include_dashboard_filters_in_excel: includeDashboardFiltersInExcel,
+        ...(includeDashboardFiltersInExcel ? { dataMask, nativeFilters } : {}),
+      };
       const resultType = isPivot ? 'post_processed' : 'full';
 
       let actualRowCount: number | undefined;
@@ -585,6 +592,8 @@ const Chart = (props: ChartProps) => {
       startExport,
       resetExport,
       streamingThreshold,
+      dataMask,
+      nativeFilters,
     ],
   );
 
@@ -600,13 +609,19 @@ const Chart = (props: ChartProps) => {
     exportTable('csv', false, true);
   }, [exportTable]);
 
-  const exportXLSX = useCallback(() => {
-    exportTable('xlsx', false);
-  }, [exportTable]);
+  const exportXLSX = useCallback(
+    (_sliceId: number, includeDashboardFilters = false) => {
+      exportTable('xlsx', false, false, includeDashboardFilters);
+    },
+    [exportTable],
+  );
 
-  const exportFullXLSX = useCallback(() => {
-    exportTable('xlsx', true);
-  }, [exportTable]);
+  const exportFullXLSX = useCallback(
+    (_sliceId: number, includeDashboardFilters = false) => {
+      exportTable('xlsx', true, false, includeDashboardFilters);
+    },
+    [exportTable],
+  );
 
   const forceRefresh = useCallback(() => {
     boundActionCreators.logEvent(LOG_ACTIONS_FORCE_REFRESH_CHART, {

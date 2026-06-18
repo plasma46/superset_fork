@@ -40,15 +40,54 @@ def quote_formulas(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def df_to_excel(df: pd.DataFrame, **kwargs: Any) -> Any:
+def df_to_excel(
+    df: pd.DataFrame,
+    export_header_text: str | None = None,
+    **kwargs: Any,
+) -> Any:
     output = io.BytesIO()
 
-    # make sure formulas are quoted, to prevent malicious injections
     df = quote_formulas(df)
+
+    sheet_name = kwargs.pop("sheet_name", "Sheet1")
+    startrow = kwargs.pop("startrow", 0)
+    include_index = kwargs.get("index", True)
+
+    data_startrow = startrow + 2 if export_header_text else startrow
 
     # pylint: disable=abstract-class-instantiated
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        df.to_excel(writer, **kwargs)
+        df.to_excel(
+            writer,
+            sheet_name=sheet_name,
+            startrow=data_startrow,
+            **kwargs,
+        )
+
+        if export_header_text:
+            worksheet = writer.sheets[sheet_name]
+            workbook = writer.book
+
+            header_format = workbook.add_format(
+                {
+                    "bold": True,
+                    "text_wrap": True,
+                    "valign": "top",
+                }
+            )
+
+            total_cols = len(df.columns) + (1 if include_index else 0)
+            last_col = max(total_cols - 1, 0)
+
+            worksheet.merge_range(
+                startrow,
+                0,
+                startrow,
+                last_col,
+                export_header_text,
+                header_format,
+            )
+            worksheet.set_row(startrow, 42)
 
     return output.getvalue()
 

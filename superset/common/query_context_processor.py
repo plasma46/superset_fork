@@ -242,6 +242,63 @@ class QueryContextProcessor:
         """
         return self._qc_datasource.get_query_result(query_object)
 
+    @staticmethod
+    def _stringify_excel_filter_value(value: Any) -> str:
+        if isinstance(value, (list, tuple, set)):
+            return ", ".join(str(v) for v in value)
+        if isinstance(value, dict):
+            return ", ".join(f"{k}={v}" for k, v in value.items())
+        return str(value)
+
+    def _get_native_filter_name_map(self) -> dict[str, str]:
+        form_data = self._query_context.form_data or {}
+        native_filters = form_data.get("nativeFilters") or {}
+        result: dict[str, str] = {}
+
+        if isinstance(native_filters, dict):
+            for key, item in native_filters.items():
+                if not isinstance(item, dict):
+                    continue
+                filter_id = str(item.get("id") or key)
+                filter_name = item.get("name") or item.get("filterName") or key
+                result[filter_id] = str(filter_name)
+
+        return result
+
+    def _build_dashboard_filters_excel_header(self) -> str | None:
+        form_data = self._query_context.form_data or {}
+        data_mask = form_data.get("dataMask") or {}
+        filter_name_map = self._get_native_filter_name_map()
+        parts: list[str] = []
+
+        for key, payload in data_mask.items():
+            if not str(key).startswith("NATIVE_FILTER") or not isinstance(
+                payload, dict
+            ):
+                continue
+
+            filter_state = payload.get("filterState") or {}
+
+            raw_value = filter_state.get("label")
+            if raw_value in (None, "", []):
+                raw_value = filter_state.get("value")
+            if raw_value in (None, "", []):
+                continue
+
+            short_key = str(key).replace("NATIVE_FILTER-", "", 1)
+            filter_name = (
+                filter_name_map.get(str(key))
+                or filter_name_map.get(short_key)
+                or payload.get("name")
+                or str(key)
+            )
+
+            parts.append(
+                f"{filter_name}: {self._stringify_excel_filter_value(raw_value)}"
+            )
+
+        return "Примененные фильтры: " + " | ".join(parts) if parts else None
+
     def get_data(
         self, df: pd.DataFrame, coltypes: list[GenericDataType]
     ) -> str | list[dict[str, Any]]:
@@ -259,8 +316,23 @@ class QueryContextProcessor:
                 )
             elif self._query_context.result_format == ChartDataResultFormat.XLSX:
                 excel.apply_column_types(df, coltypes)
+
+                form_data = self._query_context.form_data or {}
+                include_dashboard_filters = bool(
+                    form_data.get("include_dashboard_filters_in_excel")
+                )
+
+                export_header_text = (
+                    self._build_dashboard_filters_excel_header()
+                    if include_dashboard_filters
+                    else None
+                )
+
                 result = excel.df_to_excel(
-                    df, index=include_index, **current_app.config["EXCEL_EXPORT"]
+                    df,
+                    export_header_text=export_header_text,
+                    index=include_index,
+                    **current_app.config["EXCEL_EXPORT"],
                 )
             return result or ""
 

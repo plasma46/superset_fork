@@ -130,8 +130,8 @@ export interface SliceHeaderControlsProps {
   exportCSV?: (sliceId: number) => void;
   exportPivotCSV?: (sliceId: number) => void;
   exportFullCSV?: (sliceId: number) => void;
-  exportXLSX?: (sliceId: number) => void;
-  exportFullXLSX?: (sliceId: number) => void;
+  exportXLSX?: (sliceId: number, includeDashboardFilters?: boolean) => void;
+  exportFullXLSX?: (sliceId: number, includeDashboardFilters?: boolean) => void;
   handleToggleFullSize: () => void;
   exportPivotExcel?: (tableSelector: string, sliceName: string) => void;
 
@@ -297,9 +297,17 @@ const SliceHeaderControls = (
         // eslint-disable-next-line no-unused-expressions
         props.exportFullXLSX?.(props.slice.slice_id);
         break;
+      case MenuKeys.ExportFullXlsxWithFilters:
+        // eslint-disable-next-line no-unused-expressions
+        props.exportFullXLSX?.(props.slice.slice_id, true);
+        break;
       case MenuKeys.ExportXlsx:
         // eslint-disable-next-line no-unused-expressions
         props.exportXLSX?.(props.slice.slice_id);
+        break;
+      case MenuKeys.ExportXlsxWithFilters:
+        // eslint-disable-next-line no-unused-expressions
+        props.exportXLSX?.(props.slice.slice_id, true);
         break;
       case MenuKeys.DownloadAsImage: {
         // menu closes with a delay, we need to hide it manually,
@@ -584,6 +592,11 @@ const SliceHeaderControls = (
           label: t('Export to Excel'),
           icon: <Icons.FileOutlined css={dropdownIconsStyles} />,
         },
+        {
+          key: MenuKeys.ExportXlsxWithFilters,
+          label: t('Export to Excel (with dashboard filters)'),
+          icon: <Icons.FileOutlined css={dropdownIconsStyles} />,
+        },
         ...(isFeatureEnabled(FeatureFlag.AllowFullCsvExport) &&
         props.supersetCanCSV &&
         isTable
@@ -596,6 +609,11 @@ const SliceHeaderControls = (
               {
                 key: MenuKeys.ExportFullXlsx,
                 label: t('Export to full Excel'),
+                icon: <Icons.FileOutlined css={dropdownIconsStyles} />,
+              },
+              {
+                key: MenuKeys.ExportFullXlsxWithFilters,
+                label: t('Export to full Excel (with dashboard filters)'),
                 icon: <Icons.FileOutlined css={dropdownIconsStyles} />,
               },
             ]
