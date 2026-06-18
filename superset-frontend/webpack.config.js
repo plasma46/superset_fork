@@ -638,6 +638,12 @@ Object.entries(packageConfig.dependencies).forEach(([pkg, relativeDir]) => {
     config.resolve.alias[pkg] = path.resolve(APP_DIR, `${dir}/src`);
   }
 });
+// Explicit alias for fork plugins not registered as npm dependencies
+config.resolve.alias['@superset-ui/plugin-chart-rank-flow'] = path.resolve(
+  APP_DIR,
+  'plugins/plugin-chart-rank-flow/src',
+);
+
 console.log(''); // pure cosmetic new line
 
 if (isDevMode) {
