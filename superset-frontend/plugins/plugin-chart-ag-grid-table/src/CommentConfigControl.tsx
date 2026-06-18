@@ -1,7 +1,6 @@
 import React, { useCallback } from 'react';
 import { t } from '@superset-ui/core';
 import { Button, Input, Select, Checkbox } from 'antd';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import type {
   CommentConfig,
   CommentFieldConfig,
@@ -194,22 +193,16 @@ const CommentConfigControl: React.FC<Props> = ({
             placeholder={t('Comments table column')}
             onChange={e => updateKey(i, { target_column: e.target.value })}
           />
-          <Button
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => removeKey(i)}
-          />
+          <Button size="small" danger onClick={() => removeKey(i)}>✕</Button>
         </div>
       ))}
       <Button
         size="small"
         type="dashed"
-        icon={<PlusOutlined />}
         onClick={addKey}
         style={{ marginBottom: 4 }}
       >
-        {t('Add key')}
+        + {t('Add key')}
       </Button>
 
       {/* Comment fields */}
@@ -247,12 +240,7 @@ const CommentConfigControl: React.FC<Props> = ({
               value={field.type}
               onChange={v => updateField(i, { type: v })}
             />
-            <Button
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => removeField(i)}
-            />
+            <Button size="small" danger onClick={() => removeField(i)}>✕</Button>
           </div>
 
           {field.type === 'dropdown_static' && (
@@ -278,21 +266,11 @@ const CommentConfigControl: React.FC<Props> = ({
                       updateStaticOption(i, oi, { label: e.target.value })
                     }
                   />
-                  <Button
-                    size="small"
-                    danger
-                    icon={<DeleteOutlined />}
-                    onClick={() => removeStaticOption(i, oi)}
-                  />
+                  <Button size="small" danger onClick={() => removeStaticOption(i, oi)}>✕</Button>
                 </div>
               ))}
-              <Button
-                size="small"
-                type="dashed"
-                icon={<PlusOutlined />}
-                onClick={() => addStaticOption(i)}
-              >
-                {t('Add option')}
+              <Button size="small" type="dashed" onClick={() => addStaticOption(i)}>
+                + {t('Add option')}
               </Button>
             </div>
           )}
@@ -345,11 +323,10 @@ const CommentConfigControl: React.FC<Props> = ({
       <Button
         size="small"
         type="dashed"
-        icon={<PlusOutlined />}
         onClick={addField}
         style={{ marginBottom: 4 }}
       >
-        {t('Add field')}
+        + {t('Add field')}
       </Button>
 
       {/* Options */}
